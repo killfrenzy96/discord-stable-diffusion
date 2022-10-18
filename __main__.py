@@ -17,6 +17,7 @@ def parse_args():
     parser.add_argument('--token', type=str, help='The token to use for authentication.')
     parser.add_argument('--hf_token', type=str, help='The token to use for HuggingFace authentication.', default=None)
     parser.add_argument('--model_path', type=str, help='Path to the model.', default=None)
+    parser.add_argument('--model_path_waifu', type=str, help='Path to the waifu model.', default=None)
 
     return parser.parse_args()
 
@@ -26,7 +27,7 @@ async def shutdown(bot):
 def main():
     shanghai = None
     args = parse_args()
-    
+
     try:
         shanghai = Shanghai(args)
         logger.info('Executing bot.')

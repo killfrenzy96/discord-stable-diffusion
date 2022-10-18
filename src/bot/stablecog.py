@@ -19,10 +19,11 @@ embed_color = discord.Colour.from_rgb(215, 195, 134)
 
 
 class QueueObject:
-    def __init__(self, ctx, prompt, height, width, guidance_scale, steps, seed, strength,
+    def __init__(self, ctx, prompt, negative, height, width, guidance_scale, steps, seed, strength,
                  init_image, mask_image, sampler_name, command_str):
         self.ctx = ctx
         self.prompt = prompt
+        self.negative = negative
         self.height = height
         self.width = width
         self.guidance_scale = guidance_scale
@@ -38,7 +39,9 @@ class QueueObject:
 class StableCog(commands.Cog, name='Stable Diffusion', description='Create images from natural language.'):
     def __init__(self, bot):
         self.dream_thread = Thread()
-        self.text2image_model = Text2Image(model_path=bot.args.model_path)
+        self.text2image_model_stable = Text2Image(model_path=bot.args.model_path)
+        self.text2image_model_waifu = Text2Image(model_path=bot.args.model_path_waifu)
+        self.text2image_model = self.text2image_model_stable
         self.event_loop = asyncio.get_event_loop()
         self.queue = []
         self.bot = bot
@@ -52,18 +55,33 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         required=True,
     )
     @option(
+        'negative',
+        str,
+        description='A negative prompt to uncondition the model with.',
+        required=False,
+        default=''
+    )
+    @option(
+        'checkpoint',
+        str,
+        description='Which checkpoint model to use for generation',
+        required=False,
+        choices=['stable_diffusion', 'waifu_diffusion'],
+        default='unspecified'
+    )
+    @option(
         'height',
         int,
         description='Height of the generated image.',
         required=False,
-        choices=[x for x in range(192, 832, 64)]
+        choices=[x for x in range(128, 768, 128)]
     )
     @option(
         'width',
         int,
         description='Width of the generated image.',
         required=False,
-        choices=[x for x in range(192, 832, 64)]
+        choices=[x for x in range(128, 768, 128)]
     )
     @option(
         'guidance_scale',
@@ -84,7 +102,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         description='The sampler to use for generation',
         required=False,
         choices=['ddim', 'k_dpm_2_a', 'k_dpm_2', 'k_euler_a', 'k_euler', 'k_heun', 'k_lms', 'plms'],
-        default='ddim'
+        default='unspecified'
     )
     @option(
         'seed',
@@ -109,9 +127,11 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         description='The mask image to use for inpainting',
         required=False,
     )
-    async def dream_handler(self, ctx: discord.ApplicationContext, *, prompt: str, height: Optional[int] = 512,
+    async def dream_handler(self, ctx: discord.ApplicationContext, *, prompt: str, negative: str,
+                            height: Optional[int] = 512,
                             width: Optional[int] = 512, guidance_scale: Optional[float] = 7.0,
-                            steps: Optional[int] = 30,
+                            checkpoint: Optional[str] = 'stable_diffusion',
+                            steps: Optional[int] = 20,
                             sampler: Optional[str] = 'k_euler_a',
                             seed: Optional[int] = -1, strength: Optional[float] = None,
                             init_image: Optional[discord.Attachment] = None,
@@ -121,8 +141,22 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         if seed == -1:
             seed = random.randint(0, 0xFFFFFFFF)
 
+        if checkpoint == 'unspecified':
+            promptLower = prompt.lower()
+            if 'anime' in promptLower or 'waifu' in promptLower:
+                checkpoint = 'waifu_diffusion'
+            else:
+                checkpoint = 'stable_diffusion'
+
+        if checkpoint == 'stable_diffusion':
+            self.text2image_model = self.text2image_model_stable
+            if sampler == 'unspecified': sampler = 'k_euler'
+        elif checkpoint == 'waifu_diffusion':
+            self.text2image_model = self.text2image_model_waifu
+            if sampler == 'unspecified': sampler = 'k_euler_a'
+
         command_str = '/dream'
-        command_str = command_str + f' prompt:{prompt} height:{str(height)} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed}'
+        command_str = command_str + f' prompt:{prompt} negative:{negative} checkpoint:{checkpoint} height:{str(height)} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed}'
         if init_image or mask_image:
             command_str = command_str + f' strength:{strength}'
 
@@ -137,13 +171,13 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                     content=f'Please wait for your current image to finish generating before generating a new image',
                     ephemeral=True)
             else:
-                self.queue.append(QueueObject(ctx, prompt, height, width, guidance_scale, steps, seed,
+                self.queue.append(QueueObject(ctx, prompt, negative, height, width, guidance_scale, steps, seed,
                                               strength,
                                               init_image, mask_image, sampler, command_str))
                 await ctx.send_response(
                     content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``')
         else:
-            await self.process_dream(QueueObject(ctx, prompt, height, width, guidance_scale, steps, seed,
+            await self.process_dream(QueueObject(ctx, prompt, negative, height, width, guidance_scale, steps, seed,
                                                  strength,
                                                  init_image, mask_image, sampler, command_str))
             await ctx.send_response(
@@ -158,13 +192,13 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         try:
             start_time = time.time()
             if (queue_object.init_image is None) and (queue_object.mask_image is None):
-                samples, seed = self.text2image_model.dream(queue_object.prompt, queue_object.steps, False, False, 0.0,
+                samples, seed = self.text2image_model.dream(queue_object.prompt, queue_object.negative, queue_object.steps, False, False, 0.0,
                                                             1, 1, queue_object.guidance_scale, queue_object.seed,
                                                             queue_object.height, queue_object.width, False,
                                                             queue_object.sampler_name)
             elif queue_object.init_image is not None:
                 image = Image.open(requests.get(queue_object.init_image.url, stream=True).raw).convert('RGB')
-                samples, seed = self.text2image_model.translation(queue_object.prompt, image, queue_object.steps, 0.0,
+                samples, seed = self.text2image_model.translation(queue_object.prompt, queue_object.negative, image, queue_object.steps, 0.0,
                                                                   0,
                                                                   0, queue_object.guidance_scale,
                                                                   queue_object.strength, queue_object.seed,
@@ -173,7 +207,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             else:
                 image = Image.open(requests.get(queue_object.init_image.url, stream=True).raw).convert('RGB')
                 mask = Image.open(requests.get(queue_object.mask_image.url, stream=True).raw).convert('RGB')
-                samples, seed = self.text2image_model.inpaint(queue_object.prompt, image, mask, queue_object.steps, 0.0,
+                samples, seed = self.text2image_model.inpaint(queue_object.prompt, queue_object.negative, image, mask, queue_object.steps, 0.0,
                                                               1, 1, queue_object.guidance_scale,
                                                               denoising_strength=queue_object.strength,
                                                               seed=queue_object.seed, height=queue_object.height,

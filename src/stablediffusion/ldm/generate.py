@@ -153,13 +153,13 @@ class Generate:
         self.session_peakmem = torch.cuda.max_memory_allocated() if device_type == 'cuda' else None
         transformers.logging.set_verbosity_error()
 
-    def prompt2png(self, prompt, outdir, **kwargs):
+    def prompt2png(self, prompt, negative, outdir, **kwargs):
         """
         Takes a prompt and an output directory, writes out the requested number
         of PNG files, and returns an array of [[filename,seed],[filename,seed]...]
         Optional named arguments are the same as those passed to Generate and prompt2image()
         """
-        results = self.prompt2image(prompt, **kwargs)
+        results = self.prompt2image(prompt, negative, **kwargs)
         pngwriter = PngWriter(outdir)
         prefix = pngwriter.unique_prefix()
         outputs = []
@@ -170,21 +170,22 @@ class Generate:
             outputs.append([path, seed])
         return outputs
 
-    def txt2img(self, prompt, **kwargs):
+    def txt2img(self, prompt, negative, **kwargs):
         outdir = kwargs.pop('outdir', 'outputs/img-samples')
-        return self.prompt2png(prompt, outdir, **kwargs)
+        return self.prompt2png(prompt, negative, outdir, **kwargs)
 
-    def img2img(self, prompt, **kwargs):
+    def img2img(self, prompt, negative, **kwargs):
         outdir = kwargs.pop('outdir', 'outputs/img-samples')
         assert (
             'init_img' in kwargs
         ), 'call to img2img() must include the init_img argument'
-        return self.prompt2png(prompt, outdir, **kwargs)
+        return self.prompt2png(prompt, negative, outdir, **kwargs)
 
     def prompt2image(
             self,
             # these are common
             prompt,
+            negative       =    '',
             iterations     =    None,
             steps          =    None,
             seed           =    None,
@@ -266,7 +267,7 @@ class Generate:
         for m in model.modules():
             if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
                 m.padding_mode = 'circular' if seamless else m._orig_padding_mode
-        
+
         assert cfg_scale > 1.0, 'CFG_Scale (-C) must be >1.0'
         assert (
             0.0 < strength < 1.0
@@ -301,13 +302,13 @@ class Generate:
 
         try:
             uc, c = get_uc_and_c(
-                prompt, model=self.model,
+                prompt, negative, model=self.model,
                 skip_normalize=skip_normalize,
                 log_tokens=self.log_tokenization
             )
 
             (init_image,mask_image) = self._make_images(init_img,init_mask, width, height, fit)
-            
+
             if (init_image is not None) and (mask_image is not None):
                 generator = self._make_inpaint()
             elif init_image is not None:
@@ -318,6 +319,7 @@ class Generate:
             generator.set_variation(self.seed, variation_amount, with_variations)
             results = generator.generate(
                 prompt,
+                negative,
                 iterations     = iterations,
                 seed           = self.seed,
                 sampler        = self.sampler,
@@ -459,7 +461,7 @@ class Generate:
             print(traceback.format_exc(), file=sys.stderr)
             print('>> You may need to install the ESRGAN and/or GFPGAN modules')
             return
-            
+
         for r in image_list:
             image, seed = r
             try:
@@ -530,7 +532,7 @@ class Generate:
         # for usage statistics
         device_type = choose_torch_device()
         if device_type == 'cuda':
-            torch.cuda.reset_peak_memory_stats() 
+            torch.cuda.reset_peak_memory_stats()
         tic = time.time()
 
         # this does the work
@@ -538,7 +540,7 @@ class Generate:
         sd = pl_sd['state_dict']
         model = instantiate_from_config(config.model)
         m, u = model.load_state_dict(sd, strict=False)
-        
+
         if self.full_precision:
             print(
                 '>> Using slower but more accurate full-precision math (--full_precision)'
@@ -590,7 +592,7 @@ class Generate:
         image = np.array(image).astype(np.float32) / 255.0
         image = image[None].transpose(0, 3, 1, 2)
         image = torch.from_numpy(image)
-        image = 2.0 * image - 1.0 
+        image = 2.0 * image - 1.0
         return image.to(self.device)
 
     def _create_init_mask(self, image):
@@ -635,7 +637,7 @@ class Generate:
                 return True
         return False
 
-    
+
     def _check_for_erasure(self,image):
         width, height = image.size
         pixdata       = image.load()

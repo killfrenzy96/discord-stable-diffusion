@@ -12,17 +12,20 @@ log_tokenization()              print out colour-coded tokens and warn if trunca
 import re
 import torch
 
-def get_uc_and_c(prompt, model, log_tokens=False, skip_normalize=False):
-    uc = model.get_learned_conditioning([''])
+def get_uc_and_c(prompt, negative, model, log_tokens=False, skip_normalize=False):
+    uc = model.get_learned_conditioning([negative])
 
     # get weighted sub-prompts
     weighted_subprompts = split_weighted_subprompts(
         prompt, skip_normalize
     )
+    weighted_subprompts_negative = split_weighted_subprompts(
+        negative, skip_normalize
+    )
 
     if len(weighted_subprompts) > 1:
         # i dont know if this is correct.. but it works
-        c = torch.zeros_like(uc)
+        c = torch.zeros_like('')
         # normalize each "sub prompt" and add it
         for subprompt, weight in weighted_subprompts:
             log_tokenization(subprompt, model, log_tokens)
@@ -34,6 +37,22 @@ def get_uc_and_c(prompt, model, log_tokens=False, skip_normalize=False):
     else:   # just standard 1 prompt
         log_tokenization(prompt, model, log_tokens)
         c = model.get_learned_conditioning([prompt])
+
+    if len(weighted_subprompts_negative) > 1:
+        # i dont know if this is correct.. but it works
+        uc = torch.zeros_like('')
+        # normalize each "sub prompt" and add it
+        for subprompt, weight in weighted_subprompts_negative:
+            log_tokenization(subprompt, model, log_tokens)
+            uc = torch.add(
+                uc,
+                model.get_learned_conditioning([subprompt]),
+                alpha=weight,
+            )
+    else:   # just standard 1 prompt
+        log_tokenization(negative, model, log_tokens)
+        uc = model.get_learned_conditioning([negative])
+
     return (uc, c)
 
 def split_weighted_subprompts(text, skip_normalize=False)->list:
@@ -65,10 +84,13 @@ def split_weighted_subprompts(text, skip_normalize=False)->list:
     if weight_sum == 0:
         print(
             "Warning: Subprompt weights add up to zero. Discarding and using even weights instead.")
-        equal_weight = 1 / len(parsed_prompts)
+        if len(parsed_prompts) == 0:
+            equal_weight = 1
+        else:
+            equal_weight = 1 / len(parsed_prompts)
         return [(x[0], equal_weight) for x in parsed_prompts]
     return [(x[0], x[1] / weight_sum) for x in parsed_prompts]
-        
+
 # shows how the prompt is tokenized
 # usually tokens have '</w>' to indicate end-of-word,
 # but for readability it has been replaced with ' '

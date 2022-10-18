@@ -9,9 +9,9 @@ from src.stablediffusion.ldm.dream.generator.base import Generator
 class Txt2Img(Generator):
     def __init__(self,model):
         super().__init__(model)
-    
+
     @torch.no_grad()
-    def get_make_image(self,prompt,sampler,steps,cfg_scale,ddim_eta,
+    def get_make_image(self,prompt,negative,sampler,steps,cfg_scale,ddim_eta,
                        conditioning,width,height,step_callback=None,**kwargs):
         """
         Returns a function returning an image derived from the prompt and the initial image

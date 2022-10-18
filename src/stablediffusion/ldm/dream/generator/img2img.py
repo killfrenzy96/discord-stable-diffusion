@@ -12,9 +12,9 @@ class Img2Img(Generator):
     def __init__(self,model):
         super().__init__(model)
         self.init_latent         = None    # by get_noise()
-    
+
     @torch.no_grad()
-    def get_make_image(self,prompt,sampler,steps,cfg_scale,ddim_eta,
+    def get_make_image(self,prompt,negative,sampler,steps,cfg_scale,ddim_eta,
                        conditioning,init_image,strength,step_callback=None,**kwargs):
         """
         Returns a function returning an image derived from the prompt and the initial image

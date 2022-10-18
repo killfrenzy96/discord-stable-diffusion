@@ -13,9 +13,9 @@ class Inpaint(Img2Img):
     def __init__(self,model):
         self.init_latent = None
         super().__init__(model)
-    
+
     @torch.no_grad()
-    def get_make_image(self,prompt,sampler,steps,cfg_scale,ddim_eta,
+    def get_make_image(self,prompt,negative,sampler,steps,cfg_scale,ddim_eta,
                        conditioning,init_image,mask_image,strength,
                        step_callback=None,**kwargs):
         """
@@ -57,7 +57,7 @@ class Inpaint(Img2Img):
                 torch.tensor([t_enc]).to(self.model.device),
                 noise=x_T
             )
-                                       
+
             # decode it
             samples = sampler.decode(
                 z_enc,

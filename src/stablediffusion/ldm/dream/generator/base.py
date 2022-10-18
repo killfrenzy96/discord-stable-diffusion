@@ -23,7 +23,7 @@ class Generator():
         self.with_variations     = []
 
     # this is going to be overridden in img2img.py, txt2img.py and inpaint.py
-    def get_make_image(self,prompt,**kwargs):
+    def get_make_image(self,prompt,negative,**kwargs):
         """
         Returns a function returning an image derived from the prompt and the initial image
         Return value depends on the seed at the time you call it
@@ -35,12 +35,13 @@ class Generator():
         self.variation_amount = variation_amount
         self.with_variations  = with_variations
 
-    def generate(self,prompt,init_image,width,height,iterations=1,seed=None,
+    def generate(self,prompt,negative,init_image,width,height,iterations=1,seed=None,
                  image_callback=None, step_callback=None,
                  **kwargs):
         device_type,scope   = choose_autocast_device(self.model.device)
         make_image          = self.get_make_image(
             prompt,
+            negative,
             init_image    = init_image,
             width         = width,
             height        = height,
@@ -73,7 +74,7 @@ class Generator():
                     image_callback(image, seed)
                 seed = self.new_seed()
         return results
-    
+
     def sample_to_image(self,samples):
         """
         Returns a function returning an image derived from the prompt and the initial image
@@ -114,7 +115,7 @@ class Generator():
         (txt2img) or from the latent image (img2img, inpaint)
         """
         raise NotImplementedError("get_noise() must be implemented in a descendent class")
-    
+
     def new_seed(self):
         self.seed = random.randrange(0, np.iinfo(np.uint32).max)
         return self.seed

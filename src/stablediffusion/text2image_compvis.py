@@ -57,25 +57,25 @@ class Text2Image:
         except:
             import sys, traceback
             traceback.print_exc(file=sys.stdout)
-        
-    def dream(self, prompt: str, ddim_steps: int, plms: bool, fixed_code: bool, ddim_eta: float, n_iter: int, n_samples: int, cfg_scale: float, seed: int, height: int, width: int, progress: bool, sampler_name: str):
+
+    def dream(self, prompt: str, negative: str, ddim_steps: int, plms: bool, fixed_code: bool, ddim_eta: float, n_iter: int, n_samples: int, cfg_scale: float, seed: int, height: int, width: int, progress: bool, sampler_name: str):
         seed = seed_everything(seed)
         id = str(uuid.uuid4())
-        results = self.generator.txt2img(prompt=prompt, iterations = 1, steps=ddim_steps, seed=seed, cfg_scale=cfg_scale, ddim_eta=ddim_eta, width=width, height=height, sampler_name=sampler_name, outdir='storage/outputs')
+        results = self.generator.txt2img(prompt=prompt, negative=negative, iterations = 1, steps=ddim_steps, seed=seed, cfg_scale=cfg_scale, ddim_eta=ddim_eta, width=width, height=height, sampler_name=sampler_name, outdir='storage/outputs')
         shutil.move(results[0][0], f'storage/outputs/{id}.png')
         return [Image.open(f'storage/outputs/{id}.png')], results[0][1]
-    
-    def translation(self, prompt: str, init_img, ddim_steps: int, ddim_eta: float, n_iter: int, n_samples: int, cfg_scale: float, denoising_strength: float, seed: int, height: int, width: int, sampler_name: str):
+
+    def translation(self, prompt: str, negative: str, init_img, ddim_steps: int, ddim_eta: float, n_iter: int, n_samples: int, cfg_scale: float, denoising_strength: float, seed: int, height: int, width: int, sampler_name: str):
         seed = seed_everything(seed)
         id = str(uuid.uuid4())
         image = init_img.convert("RGB")
         image = resize_image(1, image, width, height)
         image.save(f'storage/init/{id}.png')
-        results = self.generator.txt2img(prompt=prompt, iterations = 1, steps=ddim_steps, seed=seed, cfg_scale=cfg_scale, ddim_eta=ddim_eta, width=width, height=height, sampler_name=sampler_name, outdir='storage/outputs', init_img=f'storage/init/{id}.png', strength=denoising_strength)
+        results = self.generator.txt2img(prompt=prompt, negative=negative, iterations = 1, steps=ddim_steps, seed=seed, cfg_scale=cfg_scale, ddim_eta=ddim_eta, width=width, height=height, sampler_name=sampler_name, outdir='storage/outputs', init_img=f'storage/init/{id}.png', strength=denoising_strength)
         shutil.move(results[0][0], f'storage/outputs/{id}.png')
         return [Image.open(f'storage/outputs/{id}.png')], results[0][1]
 
-    def inpaint(self, prompt: str, init_img, mask_img, ddim_steps: int, ddim_eta: float, n_iter: int, n_samples: int, cfg_scale: float, denoising_strength: float, seed: int, height: int, width: int):
+    def inpaint(self, prompt: str, negative: str, init_img, mask_img, ddim_steps: int, ddim_eta: float, n_iter: int, n_samples: int, cfg_scale: float, denoising_strength: float, seed: int, height: int, width: int):
         seed = seed_everything(seed)
         id = str(uuid.uuid4())
         image = init_img.convert("RGB")
@@ -84,6 +84,6 @@ class Text2Image:
         image_mask = mask_image.convert("RGB")
         image_mask = resize_image(1, image_mask, width, height)
         image_mask.save(f'storage/init/{id}-mask.png')
-        results = self.generator.txt2img(prompt=prompt, iterations = 1, steps=ddim_steps, seed=seed, cfg_scale=cfg_scale, ddim_eta=ddim_eta, width=width, height=height, sampler_name=sampler_name, outdir='storage/outputs', init_img=f'storage/init/{id}.png', init_mask=f'storage/init/{id}-mask.png', strength=denoising_strength)
+        results = self.generator.txt2img(prompt=prompt, negative=negative, iterations = 1, steps=ddim_steps, seed=seed, cfg_scale=cfg_scale, ddim_eta=ddim_eta, width=width, height=height, sampler_name=sampler_name, outdir='storage/outputs', init_img=f'storage/init/{id}.png', init_mask=f'storage/init/{id}-mask.png', strength=denoising_strength)
         shutil.move(results[0][0], f'storage/outputs/{id}.png')
         return [Image.open(f'storage/outputs/{id}.png')], results[0][1]
