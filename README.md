@@ -6,6 +6,10 @@
 
 [![Discord Server](https://discordapp.com/api/guilds/930499730843250783/widget.png?style=banner2)](https://discord.gg/Sx6Spmsgx7)
 
+## Modifications from original fork
+- Implemented loading of waifu diffusion alongside main model
+- Tweaked default config
+- Implemented negative prompts
 
 ## Setup
 Clone the repo, then install the dependencies in ``requirements.txt``, then in ``run.bat`` include your HuggingFace token and the Discord token for your bot, then simply execute the script.
