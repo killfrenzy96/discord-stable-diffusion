@@ -140,7 +140,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                             strength: Optional[float] = None,
                             init_image: Optional[discord.Attachment] = None,
                             mask_image: Optional[discord.Attachment] = None):
-        print(f'Request -- {ctx.author.name}#{ctx.author.discriminator} -- Prompt: {prompt}')
+        print(f'Request -- {ctx.author.name}#{ctx.author.discriminator}')
 
         if seed == -1:
             seed = random.randint(0, 0xFFFFFFFF)
@@ -167,8 +167,17 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
         command_str = '/dream'
         command_str = command_str + f' prompt:{prompt} negative:{negative} checkpoint:{checkpoint} height:{str(height)} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed}'
+
+        if init_image:
+            command_str = command_str + f' init_image:{init_image.url}'
+
+        if mask_image:
+            command_str = command_str + f' mask_image:{mask_image.url}'
+
         if init_image or mask_image:
             command_str = command_str + f' strength:{strength}'
+
+        print(f'{command_str}')
 
         if self.dream_thread.is_alive():
             user_already_in_queue = False
@@ -233,33 +242,39 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                                                               sampler_name=queue_object.sampler_name)
             end_time = time.time()
 
-            with BytesIO() as buffer:
-                samples[0].save(buffer, 'PNG')
-                buffer.seek(0)
-                embed = discord.Embed()
-                embed.colour = embed_color
-                embed.add_field(name='command', value=f'``{queue_object.command_str}``', inline=False)
-                embed.add_field(name='compute used', value='``{0:.3f}`` seconds'.format(end_time - start_time),
-                                inline=False)
-                embed.add_field(name='reactions', value='React with ❌ to delete your own generation\nReact with 🔁 to generate this picture again')
-                # fix errors if user doesn't have pfp
-                if queue_object.ctx.author.avatar is None:
-                    embed.set_footer(
-                        text=f'{queue_object.ctx.author.name}#{queue_object.ctx.author.discriminator}')
-                else:
-                    embed.set_footer(
-                        text=f'{queue_object.ctx.author.name}#{queue_object.ctx.author.discriminator}',
-                        icon_url=queue_object.ctx.author.avatar.url)
+            def upload_dream():
+                async def run():
+                    with BytesIO() as buffer:
+                        samples[0].save(buffer, 'PNG')
+                        buffer.seek(0)
+                        embed = discord.Embed()
+                        embed.colour = embed_color
+                        embed.add_field(name='command', value=f'``{queue_object.command_str}``', inline=False)
+                        embed.add_field(name='compute used', value='``{0:.3f}`` seconds'.format(end_time - start_time),
+                                        inline=False)
+                        embed.add_field(name='reactions', value='React with ❌ to delete your own generation\nReact with 🔁 to generate this picture again')
+                        # fix errors if user doesn't have pfp
+                        if queue_object.ctx.author.avatar is None:
+                            embed.set_footer(
+                                text=f'{queue_object.ctx.author.name}#{queue_object.ctx.author.discriminator}')
+                        else:
+                            embed.set_footer(
+                                text=f'{queue_object.ctx.author.name}#{queue_object.ctx.author.discriminator}',
+                                icon_url=queue_object.ctx.author.avatar.url)
 
-                event_loop.create_task(
-                    queue_object.ctx.channel.send(content=f'<@{queue_object.ctx.author.id}>', embed=embed,
-                                                  file=discord.File(fp=buffer, filename=f'{seed}.png')))
+                        event_loop.create_task(
+                            queue_object.ctx.channel.send(content=f'<@{queue_object.ctx.author.id}>', embed=embed,
+                                                        file=discord.File(fp=buffer, filename=f'{seed}.png')))
+                asyncio.run(run())
+            Thread(target=upload_dream, daemon=True).start()
+
         except Exception as e:
             embed = discord.Embed(title='txt2img failed', description=f'{e}\n{traceback.print_exc()}',
                                   color=embed_color)
             event_loop.create_task(queue_object.ctx.channel.send(embed=embed))
         if self.queue:
-            event_loop.create_task(self.process_dream(self.queue.pop(0)))
+            # event_loop.create_task(self.process_dream(self.queue.pop(0)))
+            self.dream(event_loop, self.queue.pop(0))
 
 def setup(bot):
     src.bot.shanghai._stableCog = StableCog(bot)

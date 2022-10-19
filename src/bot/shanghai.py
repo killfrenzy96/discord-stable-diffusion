@@ -54,17 +54,45 @@ class Shanghai(commands.Bot, ABC):
                         ctx.author = ctx.member
                         ctx.channel = self.get_channel(ctx.channel_id)
 
-                        # ``/dream prompt:anime girl negative: checkpoint:waifu_diffusion height:512 width:512 guidance_scale:7.0 steps:20 sampler:k_euler_a seed:397814580``
+                        class image_url:
+                            url: str
+
+                        init_image = image_url()
+                        mask_image = image_url()
+
+                        if ' mask_image:' in command:
+                            init_image.url = self.find_between(command, ' init_image:', ' mask_image:')
+                            mask_image.url = self.find_between(command, ' mask_image:', ' strength:')
+                        else:
+                            init_image.url = self.find_between(command, ' init_image:', ' strength:')
+                            mask_image.url = ''
+
+                        if init_image.url == '': init_image = None
+                        if mask_image.url == '': mask_image = None
+
+                        try:
+                            guidance_scale = float(self.find_between(command, ' guidance_scale:', ' steps:'))
+                        except:
+                            guidance_scale = 7.0
+
+                        try:
+                            strength = float(self.find_between(command, ' strength:', '``'))
+                        except:
+                            strength = None
+
                         await _stableCog.dream_handler(ctx=ctx,
                             prompt=self.find_between(command, '``/dream prompt:', ' negative:'),
                             negative=self.find_between(command, ' negative:', ' checkpoint:'),
                             checkpoint=self.find_between(command, ' checkpoint:', ' height:'),
                             height=int(self.find_between(command, ' height:', ' width:')),
                             width=int(self.find_between(command, ' width:', ' guidance_scale:')),
-                            guidance_scale=float(self.find_between(command, ' guidance_scale:', ' steps:')),
+                            guidance_scale=guidance_scale,
                             steps=int(self.find_between(command, ' steps:', ' sampler:')),
                             sampler=self.find_between(command, ' sampler:', ' seed:'),
-                            seed=-1
+                            seed=-1,
+                            init_image=init_image,
+                            mask_image=mask_image,
+                            strength=strength
                         )
                         # cog.dream_handler
                 # except:
