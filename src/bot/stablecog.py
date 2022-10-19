@@ -263,5 +263,4 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
 def setup(bot):
     src.bot.shanghai._stableCog = StableCog(bot)
-    print('OH NYAAA!!!')
     bot.add_cog(src.bot.shanghai._stableCog)
