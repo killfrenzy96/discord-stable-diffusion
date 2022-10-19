@@ -175,6 +175,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             command_str = command_str + f' mask_image:{mask_image.url}'
 
         if init_image or mask_image:
+            if strength == None: strength = 0.75
             command_str = command_str + f' strength:{strength}'
 
         print(f'{command_str}')
