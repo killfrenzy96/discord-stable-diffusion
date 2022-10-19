@@ -14,6 +14,7 @@ import random
 import time
 
 from src.stablediffusion.text2image_compvis import Text2Image
+import src.bot.shanghai
 
 embed_color = discord.Colour.from_rgb(215, 195, 134)
 
@@ -67,7 +68,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         description='Which checkpoint model to use for generation',
         required=False,
         choices=['stable_diffusion', 'waifu_diffusion'],
-        default='unspecified'
+        default=None
     )
     @option(
         'height',
@@ -102,7 +103,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         description='The sampler to use for generation',
         required=False,
         choices=['ddim', 'k_dpm_2_a', 'k_dpm_2', 'k_euler_a', 'k_euler', 'k_heun', 'k_lms', 'plms'],
-        default='unspecified'
+        default=None
     )
     @option(
         'seed',
@@ -127,13 +128,16 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         description='The mask image to use for inpainting',
         required=False,
     )
-    async def dream_handler(self, ctx: discord.ApplicationContext, *, prompt: str, negative: str,
+    async def dream_handler(self, ctx: discord.ApplicationContext, *, prompt: str,
+                            negative: Optional[str] = '',
                             height: Optional[int] = 512,
-                            width: Optional[int] = 512, guidance_scale: Optional[float] = 7.0,
-                            checkpoint: Optional[str] = 'stable_diffusion',
+                            width: Optional[int] = 512,
+                            guidance_scale: Optional[float] = 7.0,
+                            checkpoint: Optional[str] = None,
                             steps: Optional[int] = 20,
-                            sampler: Optional[str] = 'k_euler_a',
-                            seed: Optional[int] = -1, strength: Optional[float] = None,
+                            sampler: Optional[str] = None,
+                            seed: Optional[int] = -1,
+                            strength: Optional[float] = None,
                             init_image: Optional[discord.Attachment] = None,
                             mask_image: Optional[discord.Attachment] = None):
         print(f'Request -- {ctx.author.name}#{ctx.author.discriminator} -- Prompt: {prompt}')
@@ -141,7 +145,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         if seed == -1:
             seed = random.randint(0, 0xFFFFFFFF)
 
-        if checkpoint == 'unspecified':
+        if checkpoint == None:
             promptLower = prompt.lower()
             if 'anime' in promptLower or 'waifu' in promptLower:
                 checkpoint = 'waifu_diffusion'
@@ -150,10 +154,10 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
         if checkpoint == 'stable_diffusion':
             self.text2image_model = self.text2image_model_stable
-            if sampler == 'unspecified': sampler = 'k_euler'
+            if sampler == None: sampler = 'k_euler'
         elif checkpoint == 'waifu_diffusion':
             self.text2image_model = self.text2image_model_waifu
-            if sampler == 'unspecified': sampler = 'k_euler_a'
+            if sampler == None: sampler = 'k_euler_a'
 
         command_str = '/dream'
         command_str = command_str + f' prompt:{prompt} negative:{negative} checkpoint:{checkpoint} height:{str(height)} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed}'
@@ -167,21 +171,29 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                     user_already_in_queue = True
                     break
             if user_already_in_queue:
-                await ctx.send_response(
-                    content=f'Please wait for your current image to finish generating before generating a new image',
-                    ephemeral=True)
+                content=f'Please wait for your current image to finish generating before generating a new image'
+                try:
+                    await ctx.send_response(content=content, ephemeral=True)
+                except:
+                    await ctx.channel.send(content)
             else:
                 self.queue.append(QueueObject(ctx, prompt, negative, height, width, guidance_scale, steps, seed,
                                               strength,
                                               init_image, mask_image, sampler, command_str))
-                await ctx.send_response(
-                    content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``')
+                content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``'
+                try:
+                    await ctx.send_response(content=content)
+                except:
+                    await ctx.channel.send(content)
         else:
             await self.process_dream(QueueObject(ctx, prompt, negative, height, width, guidance_scale, steps, seed,
                                                  strength,
                                                  init_image, mask_image, sampler, command_str))
-            await ctx.send_response(
-                content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``')
+            content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``'
+            try:
+                await ctx.send_response(content=content)
+            except:
+                await ctx.channel.send(content)
 
     async def process_dream(self, queue_object: QueueObject):
         self.dream_thread = Thread(target=self.dream,
@@ -223,7 +235,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                 embed.add_field(name='command', value=f'``{queue_object.command_str}``', inline=False)
                 embed.add_field(name='compute used', value='``{0:.3f}`` seconds'.format(end_time - start_time),
                                 inline=False)
-                embed.add_field(name='delete', value='React with ❌ to delete your own generation')
+                embed.add_field(name='reactions', value='React with ❌ to delete your own generation\nReact with 🔁 to generate this picture again')
                 # fix errors if user doesn't have pfp
                 if queue_object.ctx.author.avatar is None:
                     embed.set_footer(
@@ -243,6 +255,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         if self.queue:
             event_loop.create_task(self.process_dream(self.queue.pop(0)))
 
-
 def setup(bot):
-    bot.add_cog(StableCog(bot))
+    src.bot.shanghai._stableCog = StableCog(bot)
+    print('OH NYAAA!!!')
+    bot.add_cog(src.bot.shanghai._stableCog)
