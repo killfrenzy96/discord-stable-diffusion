@@ -130,10 +130,10 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
     )
     async def dream_handler(self, ctx: discord.ApplicationContext, *, prompt: str,
                             negative: Optional[str] = '',
+                            checkpoint: Optional[str] = None,
                             height: Optional[int] = 512,
                             width: Optional[int] = 512,
                             guidance_scale: Optional[float] = 7.0,
-                            checkpoint: Optional[str] = None,
                             steps: Optional[int] = 20,
                             sampler: Optional[str] = None,
                             seed: Optional[int] = -1,
@@ -144,6 +144,12 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
         if seed == -1:
             seed = random.randint(0, 0xFFFFFFFF)
+
+        # clean prompt input
+        prompt.replace(':', ' ')
+        negative.replace(':', ' ')
+        prompt.replace('`', ' ')
+        negative.replace('`', ' ')
 
         if checkpoint == None:
             promptLower = prompt.lower()
