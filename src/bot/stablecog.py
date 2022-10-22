@@ -160,7 +160,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
         if checkpoint == 'stable_diffusion':
             self.text2image_model = self.text2image_model_stable
-            if sampler == None: sampler = 'k_euler'
+            if sampler == None: sampler = 'ddim'
         elif checkpoint == 'waifu_diffusion':
             self.text2image_model = self.text2image_model_waifu
             if sampler == None: sampler = 'k_euler_a'
