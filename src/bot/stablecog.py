@@ -2,6 +2,7 @@ import traceback
 from asyncio import AbstractEventLoop
 from threading import Thread
 
+import ntpath
 import requests
 import asyncio
 import discord
@@ -12,17 +13,20 @@ from PIL import Image
 from discord import option
 import random
 import time
+import torch
 
 from src.stablediffusion.text2image_compvis import Text2Image
 import src.bot.shanghai
 
 embed_color = discord.Colour.from_rgb(215, 195, 134)
+# checkpoint_names = []
 
 
 class QueueObject:
-    def __init__(self, ctx, prompt, negative, height, width, guidance_scale, steps, seed, strength,
+    def __init__(self, ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed, strength,
                  init_image, mask_image, sampler_name, command_str):
         self.ctx = ctx
+        self.checkpoint = checkpoint
         self.prompt = prompt
         self.negative = negative
         self.height = height
@@ -37,16 +41,71 @@ class QueueObject:
         self.command_str = command_str
 
 
+class Text2ImageCheckpoint:
+    def __init__(self, path):
+        self.path = path
+        head, tail = ntpath.split(path)
+        self.name = tail.split('.')[0]
+
+
+
 class StableCog(commands.Cog, name='Stable Diffusion', description='Create images from natural language.'):
     def __init__(self, bot):
         self.dream_thread = Thread()
-        self.text2image_model_stable = Text2Image(model_path=bot.args.model_path)
-        self.text2image_model_waifu = Text2Image(model_path=bot.args.model_path_waifu)
-        self.text2image_model = self.text2image_model_stable
+
+        self.checkpoints = []
+        checkpoint_paths = bot.args.model_path.split('|')
+
+        for path in checkpoint_paths:
+            self.checkpoints.append(Text2ImageCheckpoint(path))
+            print("Checkpoint: " + path)
+
+        self.checkpoint_main = self.checkpoints[0]
+        print("Default Main Checkpoint: " + self.checkpoint_main.name)
+
+        self.checkpoint_anime = self.checkpoint_main
+        for checkpoint in self.checkpoints:
+            if checkpoint.name == 'waifu_diffusion':
+                self.checkpoint_anime = checkpoint
+        print("Default Anime Checkpoint: " + self.checkpoint_anime.name)
+
+        # for checkpoint in self.checkpoints:
+        #     checkpoint_names.append(checkpoint.name)
+
+        self.text2image_main_name = self.checkpoint_main.name
+        self.text2image_main_model = Text2Image(model_path=self.checkpoint_main.path)
+        self.text2image_alt_name = ''
+        self.text2image_alt_model = None
+
+        self.text2image_name = self.text2image_main_name
+        self.text2image_model = self.text2image_main_model
+
         self.event_loop = asyncio.get_event_loop()
         self.queue = []
         self.bot = bot
 
+    def load_checkpoint(self, checkpoint_name: str):
+        if checkpoint_name == self.text2image_name:
+            return
+
+        if checkpoint_name == self.text2image_main_name:
+            self.text2image_name = self.text2image_main_name
+            self.text2image_model = self.text2image_main_model
+            return
+
+        if checkpoint_name == self.text2image_alt_name:
+            self.text2image_name = self.text2image_alt_name
+            self.text2image_model = self.text2image_alt_model
+            return
+
+        for checkpoint in self.checkpoints:
+            if checkpoint.name == checkpoint_name:
+                del self.text2image_model
+                del self.text2image_alt_model
+                torch.cuda.empty_cache()
+                self.text2image_name = self.text2image_alt_name = checkpoint.name
+                self.text2image_model = self.text2image_alt_model = Text2Image(model_path=checkpoint.path)
+                break
 
     @commands.slash_command(name='dream', description='Create an image.')
     @option(
@@ -67,7 +126,17 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         str,
         description='Which checkpoint model to use for generation',
         required=False,
-        choices=['stable_diffusion', 'waifu_diffusion'],
+        choices=[ # checkpoint_names,
+            'stable_diffusion',
+            'stable_diffusion_inpainting',
+            'waifu_diffusion',
+            'waifu_diffusion_merge_hitten',
+            'waifu_diffusion_merge_stable_diffusion',
+            'waifu_diffusion_merge_trinart_characters',
+            'trinart',
+            'trinart_characters',
+            'hitten_girl_anime'
+        ],
         default=None
     )
     @option(
@@ -151,23 +220,30 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         prompt.replace('`', ' ')
         negative.replace('`', ' ')
 
+        # Make sure checkpoint is a valid value
+        checkpointFound = False
+        for cp in self.checkpoints:
+            if cp.name == checkpoint:
+                checkpointFound = True
+        if checkpointFound == False:
+            checkpoint = None
+
+        # Checkpoint autoselect
         if checkpoint == None:
-            promptLower = prompt.lower()
-            if 'anime' in promptLower or 'waifu' in promptLower:
-                checkpoint = 'waifu_diffusion'
-            else:
-                checkpoint = 'stable_diffusion'
+            checkpoint = self.checkpoints[0].name
+            if 'anime' in prompt or 'waifu' in prompt:
+                checkpoint = self.checkpoint_anime.name
 
-        if checkpoint == 'stable_diffusion':
-            self.text2image_model = self.text2image_model_stable
-            if sampler == None: sampler = 'ddim'
-        elif checkpoint == 'waifu_diffusion':
-            self.text2image_model = self.text2image_model_waifu
-            if sampler == None: sampler = 'k_euler_a'
+        # Set sampler
+        if sampler == None:
+            sampler = 'ddim'
+            if 'waifu' in checkpoint or 'trinart' in checkpoint: sampler = 'k_euler_a'
 
+        # Setup command string
         command_str = '/dream'
         command_str = command_str + f' prompt:{prompt} negative:{negative} checkpoint:{checkpoint} height:{str(height)} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed}'
 
+        # Set images
         if init_image:
             command_str = command_str + f' init_image:{init_image.url}'
 
@@ -180,6 +256,9 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
         print(f'{command_str}')
 
+        content = ''
+        ephemeral = False
+
         if self.dream_thread.is_alive():
             user_already_in_queue = False
             for queue_object in self.queue:
@@ -188,28 +267,22 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                     break
             if user_already_in_queue:
                 content=f'Please wait for your current image to finish generating before generating a new image'
-                try:
-                    await ctx.send_response(content=content, ephemeral=True)
-                except:
-                    await ctx.channel.send(content)
+                ephemeral=True
             else:
-                self.queue.append(QueueObject(ctx, prompt, negative, height, width, guidance_scale, steps, seed,
+                self.queue.append(QueueObject(ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
                                               strength,
                                               init_image, mask_image, sampler, command_str))
                 content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``'
-                try:
-                    await ctx.send_response(content=content)
-                except:
-                    await ctx.channel.send(content)
         else:
-            await self.process_dream(QueueObject(ctx, prompt, negative, height, width, guidance_scale, steps, seed,
+            await self.process_dream(QueueObject(ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
                                                  strength,
                                                  init_image, mask_image, sampler, command_str))
             content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``'
-            try:
-                await ctx.send_response(content=content)
-            except:
-                await ctx.channel.send(content)
+
+        try:
+            await ctx.send_response(content=content, ephemeral=ephemeral)
+        except:
+            await ctx.channel.send(content)
 
     async def process_dream(self, queue_object: QueueObject):
         self.dream_thread = Thread(target=self.dream,
@@ -219,6 +292,9 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
     def dream(self, event_loop: AbstractEventLoop, queue_object: QueueObject):
         try:
             start_time = time.time()
+
+            self.load_checkpoint(queue_object.checkpoint)
+
             if (queue_object.init_image is None) and (queue_object.mask_image is None):
                 samples, seed = self.text2image_model.dream(queue_object.prompt, queue_object.negative, queue_object.steps, False, False, 0.0,
                                                             1, 1, queue_object.guidance_scale, queue_object.seed,

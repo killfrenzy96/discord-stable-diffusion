@@ -16,8 +16,7 @@ def parse_args():
     parser.add_argument('--prefix', type=str, help='The prefix to use for commands.', default='s!')
     parser.add_argument('--token', type=str, help='The token to use for authentication.')
     parser.add_argument('--hf_token', type=str, help='The token to use for HuggingFace authentication.', default=None)
-    parser.add_argument('--model_path', type=str, help='Path to the model.', default=None)
-    parser.add_argument('--model_path_waifu', type=str, help='Path to the waifu model.', default=None)
+    parser.add_argument('--model_path', type=str, help='Path to the model or models, seperated by a |.', default=None)
 
     return parser.parse_args()
 
