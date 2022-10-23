@@ -72,13 +72,16 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         # for checkpoint in self.checkpoints:
         #     checkpoint_names.append(checkpoint.name)
 
-        self.text2image_main_name = self.checkpoint_main.name
-        self.text2image_main_model = Text2Image(model_path=self.checkpoint_main.path)
-        self.text2image_alt_name = ''
-        self.text2image_alt_model = None
+        # self.text2image_main_name = self.checkpoint_main.name
+        # self.text2image_main_model = Text2Image(model_path=self.checkpoint_main.path)
+        # self.text2image_alt_name = ''
+        # self.text2image_alt_model = None
 
-        self.text2image_name = self.text2image_main_name
-        self.text2image_model = self.text2image_main_model
+        # self.text2image_name = self.text2image_main_name
+        # self.text2image_model = self.text2image_main_model
+
+        self.text2image_name = self.checkpoint_main.name
+        self.text2image_model = Text2Image(model_path=self.checkpoint_main.path)
 
         self.event_loop = asyncio.get_event_loop()
         self.queue = []
@@ -88,23 +91,25 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         if checkpoint_name == self.text2image_name:
             return
 
-        if checkpoint_name == self.text2image_main_name:
-            self.text2image_name = self.text2image_main_name
-            self.text2image_model = self.text2image_main_model
-            return
+        # if checkpoint_name == self.text2image_main_name:
+        #     self.text2image_name = self.text2image_main_name
+        #     self.text2image_model = self.text2image_main_model
+        #     return
 
-        if checkpoint_name == self.text2image_alt_name:
-            self.text2image_name = self.text2image_alt_name
-            self.text2image_model = self.text2image_alt_model
-            return
+        # if checkpoint_name == self.text2image_alt_name:
+        #     self.text2image_name = self.text2image_alt_name
+        #     self.text2image_model = self.text2image_alt_model
+        #     return
 
         for checkpoint in self.checkpoints:
             if checkpoint.name == checkpoint_name:
                 del self.text2image_model
-                del self.text2image_alt_model
+                # del self.text2image_alt_model
                 torch.cuda.empty_cache()
-                self.text2image_name = self.text2image_alt_name = checkpoint.name
-                self.text2image_model = self.text2image_alt_model = Text2Image(model_path=checkpoint.path)
+                self.text2image_name = checkpoint.name
+                self.text2image_model = Text2Image(model_path=checkpoint.path)
+                # self.text2image_alt_name = self.text2image_name
+                # self.text2image_alt_model = self.text2image_model
                 break
 
     @commands.slash_command(name='dream', description='Create an image.')
@@ -237,7 +242,12 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         # Set sampler
         if sampler == None:
             sampler = 'ddim'
-            if 'waifu' in checkpoint or 'trinart' in checkpoint: sampler = 'k_euler_a'
+            if 'stable' in checkpoint:
+                sampler = 'ddim'
+            elif 'waifu' in checkpoint:
+                sampler = 'k_euler_a'
+            elif 'hitten' in checkpoint or 'trinart' in checkpoint:
+                sampler = 'k_euler'
 
         # Setup command string
         command_str = '/dream'
