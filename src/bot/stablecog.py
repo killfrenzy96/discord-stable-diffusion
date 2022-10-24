@@ -79,11 +79,11 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         # for checkpoint in self.checkpoints:
         #     checkpoint_names.append(checkpoint.name)
 
-        models_loaded_length = int(bot.args.model_max_loaded)
+        models_loaded_length = int(bot.args.model_cache)
         if models_loaded_length == 0: models_loaded_length = 1
         print("Maximum models to keep in VRAM: " + str(models_loaded_length))
 
-        self.models_loaded = [None] * int(bot.args.model_max_loaded)
+        self.models_loaded = [None] * models_loaded_length
         self.models_loaded[0] = Text2ImageModel(self.checkpoint_main)
 
         self.event_loop = asyncio.get_event_loop()
