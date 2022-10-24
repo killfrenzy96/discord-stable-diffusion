@@ -42,10 +42,17 @@ class QueueObject:
 
 
 class Text2ImageCheckpoint:
-    def __init__(self, path):
+    def __init__(self, path: str):
         self.path = path
         head, tail = ntpath.split(path)
         self.name = tail.split('.')[0]
+
+
+class Text2ImageModel:
+    def __init__(self, checkpoint: Text2ImageCheckpoint):
+        self.checkpoint = checkpoint
+        self.text2image_model = Text2Image(model_path=checkpoint.path)
+        self.last_used = time.time()
 
 
 
@@ -61,56 +68,58 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             print("Checkpoint: " + path)
 
         self.checkpoint_main = self.checkpoints[0]
-        print("Default Main Checkpoint: " + self.checkpoint_main.name)
+        print("Default main checkpoint: " + self.checkpoint_main.name)
 
         self.checkpoint_anime = self.checkpoint_main
         for checkpoint in self.checkpoints:
             if checkpoint.name == 'waifu_diffusion':
                 self.checkpoint_anime = checkpoint
-        print("Default Anime Checkpoint: " + self.checkpoint_anime.name)
+        print("Default anime checkpoint: " + self.checkpoint_anime.name)
 
         # for checkpoint in self.checkpoints:
         #     checkpoint_names.append(checkpoint.name)
 
-        # self.text2image_main_name = self.checkpoint_main.name
-        # self.text2image_main_model = Text2Image(model_path=self.checkpoint_main.path)
-        # self.text2image_alt_name = ''
-        # self.text2image_alt_model = None
+        models_loaded_length = int(bot.args.model_max_loaded)
+        if models_loaded_length == 0: models_loaded_length = 1
+        print("Maximum models to keep in VRAM: " + str(models_loaded_length))
 
-        # self.text2image_name = self.text2image_main_name
-        # self.text2image_model = self.text2image_main_model
-
-        self.text2image_name = self.checkpoint_main.name
-        self.text2image_model = Text2Image(model_path=self.checkpoint_main.path)
+        self.models_loaded = [None] * int(bot.args.model_max_loaded)
+        self.models_loaded[0] = Text2ImageModel(self.checkpoint_main)
 
         self.event_loop = asyncio.get_event_loop()
         self.queue = []
         self.bot = bot
 
-    def load_checkpoint(self, checkpoint_name: str):
-        if checkpoint_name == self.text2image_name:
-            return
+    def load_model(self, checkpoint_name: str):
+        # Use checkpoint is already VRAM
+        for model in self.models_loaded:
+            if model == None:
+                continue
+            if model.checkpoint.name == checkpoint_name:
+                model.last_used = time.time()
+                return model.text2image_model
 
-        # if checkpoint_name == self.text2image_main_name:
-        #     self.text2image_name = self.text2image_main_name
-        #     self.text2image_model = self.text2image_main_model
-        #     return
-
-        # if checkpoint_name == self.text2image_alt_name:
-        #     self.text2image_name = self.text2image_alt_name
-        #     self.text2image_model = self.text2image_alt_model
-        #     return
-
+        # Load checkpoint into VRAM
         for checkpoint in self.checkpoints:
             if checkpoint.name == checkpoint_name:
-                del self.text2image_model
-                # del self.text2image_alt_model
-                torch.cuda.empty_cache()
-                self.text2image_name = checkpoint.name
-                self.text2image_model = Text2Image(model_path=checkpoint.path)
-                # self.text2image_alt_name = self.text2image_name
-                # self.text2image_alt_model = self.text2image_model
-                break
+                # Unload oldest model
+                model_index = 0
+                for index, model in enumerate(self.models_loaded):
+                    if model == None:
+                        model_index = index
+                        break
+                    if model.last_used < self.models_loaded[model_index].last_used:
+                        model_index = index
+
+                if self.models_loaded[model_index] != None:
+                    print("Unloading model [" + str(model_index) + "]: " + self.models_loaded[model_index].checkpoint.name)
+                    self.models_loaded[model_index] = None
+                    torch.cuda.empty_cache()
+
+                # Load model
+                print("Loading model [" + str(model_index) + "]: " + checkpoint.name)
+                self.models_loaded[model_index] = Text2ImageModel(checkpoint)
+                return self.models_loaded[model_index].text2image_model
 
     @commands.slash_command(name='dream', description='Create an image.')
     @option(
@@ -303,16 +312,16 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         try:
             start_time = time.time()
 
-            self.load_checkpoint(queue_object.checkpoint)
+            model: Text2Image = self.load_model(queue_object.checkpoint)
 
             if (queue_object.init_image is None) and (queue_object.mask_image is None):
-                samples, seed = self.text2image_model.dream(queue_object.prompt, queue_object.negative, queue_object.steps, False, False, 0.0,
+                samples, seed = model.dream(queue_object.prompt, queue_object.negative, queue_object.steps, False, False, 0.0,
                                                             1, 1, queue_object.guidance_scale, queue_object.seed,
                                                             queue_object.height, queue_object.width, False,
                                                             queue_object.sampler_name)
             elif queue_object.init_image is not None:
                 image = Image.open(requests.get(queue_object.init_image.url, stream=True).raw).convert('RGB')
-                samples, seed = self.text2image_model.translation(queue_object.prompt, queue_object.negative, image, queue_object.steps, 0.0,
+                samples, seed = model.translation(queue_object.prompt, queue_object.negative, image, queue_object.steps, 0.0,
                                                                   0,
                                                                   0, queue_object.guidance_scale,
                                                                   queue_object.strength, queue_object.seed,
@@ -321,13 +330,14 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             else:
                 image = Image.open(requests.get(queue_object.init_image.url, stream=True).raw).convert('RGB')
                 mask = Image.open(requests.get(queue_object.mask_image.url, stream=True).raw).convert('RGB')
-                samples, seed = self.text2image_model.inpaint(queue_object.prompt, queue_object.negative, image, mask, queue_object.steps, 0.0,
+                samples, seed = model.inpaint(queue_object.prompt, queue_object.negative, image, mask, queue_object.steps, 0.0,
                                                               1, 1, queue_object.guidance_scale,
                                                               denoising_strength=queue_object.strength,
                                                               seed=queue_object.seed, height=queue_object.height,
                                                               width=queue_object.width,
                                                               sampler_name=queue_object.sampler_name)
             end_time = time.time()
+            del model
 
             def upload_dream():
                 async def run():

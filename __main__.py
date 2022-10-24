@@ -17,6 +17,7 @@ def parse_args():
     parser.add_argument('--token', type=str, help='The token to use for authentication.')
     parser.add_argument('--hf_token', type=str, help='The token to use for HuggingFace authentication.', default=None)
     parser.add_argument('--model_path', type=str, help='Path to the model or models, seperated by a |.', default=None)
+    parser.add_argument('--model_max_loaded', type=str, help='Maximum models to keep in VRAM.', default=1)
 
     return parser.parse_args()
 
