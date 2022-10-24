@@ -84,7 +84,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         print("Maximum models to keep in VRAM: " + str(models_loaded_length))
 
         self.models_loaded = [None] * models_loaded_length
-        self.models_loaded[0] = Text2ImageModel(self.checkpoint_main)
+        # self.models_loaded[0] = Text2ImageModel(self.checkpoint_main)
 
         self.event_loop = asyncio.get_event_loop()
         self.queue = []
