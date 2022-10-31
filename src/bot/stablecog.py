@@ -282,7 +282,11 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         # Setup command string
         def get_command_str():
             command_str = '/dream'
-            command_str = command_str + f' prompt:{prompt} negative:{negative} checkpoint:{checkpoint} height:{str(height)} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed} batch:{batch}'
+
+            negative_str = negative
+            if negative == '': negative_str = '-'
+
+            command_str = command_str + f' prompt:{prompt} negative:{negative_str} checkpoint:{checkpoint} height:{height} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed} batch:{batch}'
 
             # Set images
             if init_image:

@@ -73,6 +73,7 @@ class Shanghai(commands.Bot, ABC):
                         if ' negative:' in command:
                             prompt = self.find_between(command, '``/dream prompt:', ' negative:')
                             negative = self.find_between(command, ' negative:', ' checkpoint:')
+                            if negative == '-': negative = ''
                         else:
                             prompt = self.find_between(command, '``/dream prompt:', ' checkpoint:')
                             negative = ''
