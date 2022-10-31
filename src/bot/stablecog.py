@@ -333,6 +333,9 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             # content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``'
             content=f'<@{ctx.author.id}> Dreaming - Queue Position: ``{queue_length}``'
 
+            if batch:
+                content += f' - Batch: ``{batch}``'
+
         try:
             await ctx.send_response(content=content, ephemeral=ephemeral)
         except:
