@@ -98,6 +98,7 @@ class Shanghai(commands.Bot, ABC):
                             except:
                                 strength = None
                             batch = int(self.find_between(command, ' batch:', '``'))
+                            if batch == 0: batch = 1
                         else:
                             try:
                                 strength = float(self.find_between(command, ' strength:', '``'))
