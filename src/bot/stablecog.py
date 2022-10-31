@@ -24,7 +24,7 @@ embed_color = discord.Colour.from_rgb(215, 195, 134)
 
 class QueueObject:
     def __init__(self, ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed, strength,
-                 init_image, mask_image, sampler_name, command_str):
+                 init_image, mask_image, sampler_name, command_str, is_batch):
         self.ctx = ctx
         self.checkpoint = checkpoint
         self.prompt = prompt
@@ -39,6 +39,7 @@ class QueueObject:
         self.mask_image = mask_image
         self.sampler_name = sampler_name
         self.command_str = command_str
+        self.is_batch = is_batch
 
 
 class Text2ImageCheckpoint:
@@ -268,21 +269,22 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                 sampler = 'k_euler'
 
         # Setup command string
-        command_str = '/dream'
-        command_str = command_str + f' prompt:{prompt} negative:{negative} checkpoint:{checkpoint} height:{str(height)} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed} batch:{batch}'
+        def get_command_str():
+            command_str = '/dream'
+            command_str = command_str + f' prompt:{prompt} negative:{negative} checkpoint:{checkpoint} height:{str(height)} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed} batch:{batch}'
 
-        # Set images
-        if init_image:
-            command_str = command_str + f' init_image:{init_image.url}'
+            # Set images
+            if init_image:
+                command_str = command_str + f' init_image:{init_image.url}'
 
-        if mask_image:
-            command_str = command_str + f' mask_image:{mask_image.url}'
+            if mask_image:
+                command_str = command_str + f' mask_image:{mask_image.url}'
 
-        if init_image or mask_image:
-            if strength == None: strength = 0.75
-            command_str = command_str + f' strength:{strength}'
+            if init_image or mask_image:
+                if strength == None: strength = 0.75
+                command_str = command_str + f' strength:{strength}'
 
-        print(f'{command_str}')
+            return command_str
 
         content = ''
         ephemeral = False
@@ -299,23 +301,26 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         else:
             queue_length = len(self.queue)
 
+            command_str = get_command_str()
+            print(command_str)
+
             if self.dream_thread.is_alive():
                 self.queue.append(QueueObject(ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
                                             strength,
-                                            init_image, mask_image, sampler, command_str))
+                                            init_image, mask_image, sampler, command_str, False))
             else:
                 await self.process_dream(QueueObject(ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
                                                     strength,
-                                                    init_image, mask_image, sampler, command_str))
+                                                    init_image, mask_image, sampler, command_str, False))
 
             batch_count = 1
-            batch_seed = seed
             while batch_count < batch:
-                if seed != -1: batch_seed += 1
-                self.queue.append(QueueObject(ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, batch_seed,
-                                                strength,
-                                                init_image, mask_image, sampler, command_str))
+                seed += 1
                 batch_count += 1
+                command_str = get_command_str()
+                self.queue.append(QueueObject(ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
+                                                strength,
+                                                init_image, mask_image, sampler, command_str, True))
 
             # content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``'
             content=f'<@{ctx.author.id}> Dreaming - Queue Position: ``{queue_length}``'
@@ -366,24 +371,30 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                     with BytesIO() as buffer:
                         samples[0].save(buffer, 'PNG')
                         buffer.seek(0)
-                        embed = discord.Embed()
-                        embed.colour = embed_color
+                        # embed = discord.Embed()
+                        # embed.colour = embed_color
                         # embed.add_field(name='command', value=f'``{queue_object.command_str}``', inline=False)
                         # embed.add_field(name='compute used', value='``{0:.3f}`` seconds'.format(end_time - start_time),
                         #                 inline=False)
                         # embed.add_field(name='react', value='React with ❌ to delete your own generation\nReact with 🔁 to generate this picture again\n' +
                         #     'Compute time: ' + '``{0:.3f}`` seconds\n'.format(end_time - start_time))
                         # fix errors if user doesn't have pfp
-                        if queue_object.ctx.author.avatar is None:
-                            embed.set_footer(
-                                text=f'{queue_object.ctx.author.name}#{queue_object.ctx.author.discriminator}')
+                        # if queue_object.ctx.author.avatar is None:
+                        #     embed.set_footer(
+                        #         text=f'{queue_object.ctx.author.name}#{queue_object.ctx.author.discriminator}')
+                        # else:
+                        #     embed.set_footer(
+                        #         text=f'{queue_object.ctx.author.name}#{queue_object.ctx.author.discriminator}',
+                        #         icon_url=queue_object.ctx.author.avatar.url)
+
+                        content = ''
+                        if queue_object.is_batch:
+                            content = f'<@{queue_object.ctx.author.id}>'
                         else:
-                            embed.set_footer(
-                                text=f'{queue_object.ctx.author.name}#{queue_object.ctx.author.discriminator}',
-                                icon_url=queue_object.ctx.author.avatar.url)
+                            content = f'<@{queue_object.ctx.author.id}> ``{queue_object.command_str}``'
 
                         event_loop.create_task(
-                            queue_object.ctx.channel.send(content=f'<@{queue_object.ctx.author.id}> ``{queue_object.command_str}``', # embed=embed,
+                            queue_object.ctx.channel.send(content=content, # embed=embed,
                                                         file=discord.File(fp=buffer, filename=f'{seed}.png')))
                 asyncio.run(run())
             Thread(target=upload_dream, daemon=True).start()

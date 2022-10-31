@@ -30,7 +30,7 @@ class Shanghai(commands.Bot, ABC):
             try:
                 # Check if the message from Shanghai was actually a generation
                 # if message.embeds[0].fields[0].name == 'react':
-                if '``/dream prompt:' in message.content:
+                if 'Dreaming - Queue Position:' not in message.content:
                     await message.add_reaction('❌')
                     await message.add_reaction('🔁')
             except:
