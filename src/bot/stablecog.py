@@ -217,7 +217,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         int,
         description='The amount of images to generate',
         required=False,
-        choices=[1,2,3,4,5,6],
+        choices=[1,2,3,4,5,6,7,8],
         default=1
     )
     async def dream_handler(self, ctx: discord.ApplicationContext, *, prompt: str,
