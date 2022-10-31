@@ -211,6 +211,14 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         description='The mask image to use for inpainting',
         required=False,
     )
+    @option(
+        'batch',
+        int,
+        description='The amount of images to generate',
+        required=False,
+        choices=[1,2,3,4,5,6],
+        default=1
+    )
     async def dream_handler(self, ctx: discord.ApplicationContext, *, prompt: str,
                             negative: Optional[str] = '',
                             checkpoint: Optional[str] = None,
@@ -222,7 +230,8 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                             seed: Optional[int] = -1,
                             strength: Optional[float] = None,
                             init_image: Optional[discord.Attachment] = None,
-                            mask_image: Optional[discord.Attachment] = None):
+                            mask_image: Optional[discord.Attachment] = None,
+                            batch: Optional[int] = 1):
         print(f'Request -- {ctx.author.name}#{ctx.author.discriminator}')
 
         if seed == -1:
@@ -260,7 +269,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
         # Setup command string
         command_str = '/dream'
-        command_str = command_str + f' prompt:{prompt} negative:{negative} checkpoint:{checkpoint} height:{str(height)} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed}'
+        command_str = command_str + f' prompt:{prompt} negative:{negative} checkpoint:{checkpoint} height:{str(height)} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed} batch:{batch}'
 
         # Set images
         if init_image:
@@ -278,25 +287,38 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         content = ''
         ephemeral = False
 
-        if self.dream_thread.is_alive():
-            user_already_in_queue = False
-            for queue_object in self.queue:
-                if queue_object.ctx.author.id == ctx.author.id:
-                    user_already_in_queue = True
-                    break
-            if user_already_in_queue:
-                content=f'Please wait for your current image to finish generating before generating a new image'
-                ephemeral=True
-            else:
-                self.queue.append(QueueObject(ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
-                                              strength,
-                                              init_image, mask_image, sampler, command_str))
-                content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``'
+        user_already_in_queue = 0
+        for queue_object in self.queue:
+            if queue_object.ctx.author.id == ctx.author.id:
+                user_already_in_queue += 1
+
+        if user_already_in_queue > 2:
+            content=f'<@{ctx.author.id}> Please wait for your current images to finish generating before generating a new image'
+            ephemeral=True
+
         else:
-            await self.process_dream(QueueObject(ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
-                                                 strength,
-                                                 init_image, mask_image, sampler, command_str))
-            content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``'
+            queue_length = len(self.queue)
+
+            if self.dream_thread.is_alive():
+                self.queue.append(QueueObject(ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
+                                            strength,
+                                            init_image, mask_image, sampler, command_str))
+            else:
+                await self.process_dream(QueueObject(ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
+                                                    strength,
+                                                    init_image, mask_image, sampler, command_str))
+
+            batch_count = 1
+            batch_seed = seed
+            while batch_count < batch:
+                if seed != -1: batch_seed += 1
+                self.queue.append(QueueObject(ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, batch_seed,
+                                                strength,
+                                                init_image, mask_image, sampler, command_str))
+                batch_count += 1
+
+            # content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``'
+            content=f'<@{ctx.author.id}> Dreaming - Queue Position: ``{queue_length}``'
 
         try:
             await ctx.send_response(content=content, ephemeral=ephemeral)
@@ -346,10 +368,11 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                         buffer.seek(0)
                         embed = discord.Embed()
                         embed.colour = embed_color
-                        embed.add_field(name='command', value=f'``{queue_object.command_str}``', inline=False)
-                        embed.add_field(name='compute used', value='``{0:.3f}`` seconds'.format(end_time - start_time),
-                                        inline=False)
-                        embed.add_field(name='reactions', value='React with ❌ to delete your own generation\nReact with 🔁 to generate this picture again')
+                        # embed.add_field(name='command', value=f'``{queue_object.command_str}``', inline=False)
+                        # embed.add_field(name='compute used', value='``{0:.3f}`` seconds'.format(end_time - start_time),
+                        #                 inline=False)
+                        # embed.add_field(name='react', value='React with ❌ to delete your own generation\nReact with 🔁 to generate this picture again\n' +
+                        #     'Compute time: ' + '``{0:.3f}`` seconds\n'.format(end_time - start_time))
                         # fix errors if user doesn't have pfp
                         if queue_object.ctx.author.avatar is None:
                             embed.set_footer(
@@ -360,7 +383,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                                 icon_url=queue_object.ctx.author.avatar.url)
 
                         event_loop.create_task(
-                            queue_object.ctx.channel.send(content=f'<@{queue_object.ctx.author.id}>', embed=embed,
+                            queue_object.ctx.channel.send(content=f'<@{queue_object.ctx.author.id}> ``{queue_object.command_str}``', # embed=embed,
                                                         file=discord.File(fp=buffer, filename=f'{seed}.png')))
                 asyncio.run(run())
             Thread(target=upload_dream, daemon=True).start()

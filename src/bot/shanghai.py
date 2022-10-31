@@ -29,7 +29,8 @@ class Shanghai(commands.Bot, ABC):
         if message.author == self.user:
             try:
                 # Check if the message from Shanghai was actually a generation
-                if message.embeds[0].fields[0].name == 'command':
+                # if message.embeds[0].fields[0].name == 'react':
+                if '``/dream prompt:' in message.content:
                     await message.add_reaction('❌')
                     await message.add_reaction('🔁')
             except:
@@ -38,18 +39,22 @@ class Shanghai(commands.Bot, ABC):
     async def on_raw_reaction_add(self, ctx):
         if ctx.emoji.name == '❌':
             message = await self.get_channel(ctx.channel_id).fetch_message(ctx.message_id)
-            if message.embeds:
+            # if message.embeds:
                 # look at the message footer to see if the generation was by the user who reacted
-                if message.embeds[0].footer.text == f'{ctx.member.name}#{ctx.member.discriminator}':
-                    await message.delete()
+                # if message.embeds[0].footer.text == f'{ctx.member.name}#{ctx.member.discriminator}':
+                #     await message.delete()
+            if message.author == self.user and message.content.startswith(f'<@{ctx.member.id}>'):
+                await message.delete()
 
         if ctx.emoji.name == '🔁':
             message = await self.get_channel(ctx.channel_id).fetch_message(ctx.message_id)
-            if message.embeds and ctx.member != self.user:
+            if message.author == self.user and ctx.member != self.user:
                 # try:
                     # Check if the message from Shanghai was actually a generation
-                    if message.embeds[0].fields[0].name == 'command':
-                        command = message.embeds[0].fields[0].value
+                    # if message.embeds[0].fields[0].name == 'command':
+                    if '``/dream prompt:' in message.content:
+                        # command = message.embeds[0].fields[0].value
+                        command = message.content
                         # messageReference = await self.get_channel(ctx.channel_id).fetch_message(message.reference.message_id)
                         ctx.author = ctx.member
                         ctx.channel = self.get_channel(ctx.channel_id)
@@ -57,8 +62,19 @@ class Shanghai(commands.Bot, ABC):
                         class image_url:
                             url: str
 
+                        prompt = ''
+                        negative = ''
+                        strength = 0.75
+                        batch = 1
                         init_image = image_url()
                         mask_image = image_url()
+
+                        if ' negative:' in command:
+                            prompt = self.find_between(command, '``/dream prompt:', ' negative:')
+                            negative = self.find_between(command, ' negative:', ' checkpoint:')
+                        else:
+                            prompt = self.find_between(command, '``/dream prompt:', ' checkpoint:')
+                            negative = ''
 
                         if ' mask_image:' in command:
                             init_image.url = self.find_between(command, ' init_image:', ' mask_image:')
@@ -75,14 +91,22 @@ class Shanghai(commands.Bot, ABC):
                         except:
                             guidance_scale = 7.0
 
-                        try:
-                            strength = float(self.find_between(command, ' strength:', '``'))
-                        except:
-                            strength = None
+                        if ' batch:' in command:
+                            try:
+                                strength = float(self.find_between(command, ' strength:', ' batch:'))
+                            except:
+                                strength = None
+                            batch = int(self.find_between(command, ' batch:', '``'))
+                        else:
+                            try:
+                                strength = float(self.find_between(command, ' strength:', '``'))
+                            except:
+                                strength = None
+                            batch = 1
 
                         await _stableCog.dream_handler(ctx=ctx,
-                            prompt=self.find_between(command, '``/dream prompt:', ' negative:'),
-                            negative=self.find_between(command, ' negative:', ' checkpoint:'),
+                            prompt=prompt,
+                            negative=negative,
                             checkpoint=self.find_between(command, ' checkpoint:', ' height:'),
                             height=int(self.find_between(command, ' height:', ' width:')),
                             width=int(self.find_between(command, ' width:', ' guidance_scale:')),
@@ -92,7 +116,8 @@ class Shanghai(commands.Bot, ABC):
                             seed=-1,
                             init_image=init_image,
                             mask_image=mask_image,
-                            strength=strength
+                            strength=strength,
+                            batch=batch
                         )
                         # cog.dream_handler
                 # except:
