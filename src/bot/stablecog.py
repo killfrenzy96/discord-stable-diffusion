@@ -247,7 +247,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         print(f'Request -- {ctx.author.name}#{ctx.author.discriminator}')
 
         if seed == -1:
-            seed = random.randint(0, 0xFFFFFFFF)
+            seed = random.randint(0, 0xFFFFFFFF - batch)
 
         # clean prompt input
         prompt.replace(':', ' ')
