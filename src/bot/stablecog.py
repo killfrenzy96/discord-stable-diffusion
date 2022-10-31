@@ -333,7 +333,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             # content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``'
             content=f'<@{ctx.author.id}> Dreaming - Queue Position: ``{queue_length}``'
 
-            if batch:
+            if batch > 1:
                 content += f' - Batch: ``{batch}``'
 
         try:
