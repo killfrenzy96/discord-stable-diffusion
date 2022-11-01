@@ -198,7 +198,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         int,
         description='The amount of steps to sample the model',
         required=False,
-        choices=[x for x in range(5, 55, 5)]
+        choices=[x for x in range(5, 51, 5)]
     )
     @option(
         'sampler',
@@ -236,7 +236,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         int,
         description='The amount of images to generate',
         required=False,
-        choices=[1,2,3,4,5,6,7,8],
+        choices=[x for x in range(1, 9, 1)],
         default=1
     )
     async def dream_handler(self, ctx: discord.ApplicationContext, *, prompt: str,
@@ -287,8 +287,13 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             elif 'hitten' in checkpoint or 'trinart' in checkpoint:
                 sampler = 'k_euler'
 
-        # Set defaults
+        # Set limits
         if strength == None: strength = 0.75
+        if strength < 0.01: strength = 0.01
+        if strength > 0.99: strength = 0.99
+
+        if guidance_scale == None: guidance_scale = 7.0
+        if guidance_scale <= 1.0: guidance_scale = 1.01
 
         # Setup command string
         def get_command_str():
