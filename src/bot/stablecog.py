@@ -2,6 +2,11 @@ import traceback
 from asyncio import AbstractEventLoop
 from threading import Thread
 
+import os
+import sys
+import psutil
+import logging
+
 import ntpath
 import requests
 import asyncio
@@ -24,7 +29,7 @@ embed_color = discord.Colour.from_rgb(215, 195, 134)
 
 class DreamQueueObject:
     def __init__(self, ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed, strength,
-                 init_image, mask_image, sampler_name, command_str, is_batch):
+                 init_image, mask_image, sampler_name, command_str, is_batch, init_image_data = None, mask_image_data = None):
         self.ctx = ctx
         self.checkpoint = checkpoint
         self.prompt = prompt
@@ -40,6 +45,9 @@ class DreamQueueObject:
         self.sampler_name = sampler_name
         self.command_str = command_str
         self.is_batch = is_batch
+
+        self.init_image_data = init_image_data
+        self.mask_image_data = mask_image_data
 
 
 class UploadQueueObject:
@@ -279,16 +287,20 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             elif 'hitten' in checkpoint or 'trinart' in checkpoint:
                 sampler = 'k_euler'
 
+        # Set defaults
+        if strength == None: strength = 0.75
+
         # Setup command string
         def get_command_str():
             command_str = '/dream'
 
-            negative_str = negative
-            if negative == '': negative_str = '-'
+            command_str = command_str + f' prompt:{prompt}'
 
-            command_str = command_str + f' prompt:{prompt} negative:{negative_str} checkpoint:{checkpoint} height:{height} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed} batch:{batch}'
+            if negative != '':
+                command_str += f' negative:{negative}'
 
-            # Set images
+            command_str += f'checkpoint:{checkpoint} height:{height} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed} batch:{batch}'
+
             if init_image:
                 command_str = command_str + f' init_image:{init_image.url}'
 
@@ -296,7 +308,6 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                 command_str = command_str + f' mask_image:{mask_image.url}'
 
             if init_image or mask_image:
-                if strength == None: strength = 0.75
                 command_str = command_str + f' strength:{strength}'
 
             return command_str
@@ -319,9 +330,18 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             command_str = get_command_str()
             print(command_str)
 
+            init_image_data = None
+            mask_image_data = None
+
+            if init_image is not None and init_image.url != '':
+                init_image_data = Image.open(requests.get(init_image.url, stream=True).raw).convert('RGB')
+
+            if mask_image is not None and mask_image.url != '':
+                mask_image_data = Image.open(requests.get(mask_image.url, stream=True).raw).convert('RGB')
+
             await self.process_dream(DreamQueueObject(
                 ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
-                strength, init_image, mask_image, sampler, command_str, False
+                strength, init_image, mask_image, sampler, command_str, False, init_image_data, mask_image_data
             ))
 
             batch_count = 1
@@ -331,7 +351,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                 command_str = get_command_str()
                 self.dream_queue.append(DreamQueueObject(
                     ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
-                    strength, init_image, mask_image, sampler, command_str, True
+                    strength, init_image, mask_image, sampler, command_str, True, init_image_data, mask_image_data
                 ))
 
             # content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``'
@@ -365,7 +385,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                                                             queue_object.height, queue_object.width, False,
                                                             queue_object.sampler_name)
             elif queue_object.init_image is not None:
-                image = Image.open(requests.get(queue_object.init_image.url, stream=True).raw).convert('RGB')
+                image = queue_object.init_image_data # Image.open(requests.get(queue_object.init_image.url, stream=True).raw).convert('RGB')
                 samples, seed = model.translation(queue_object.prompt, queue_object.negative, image, queue_object.steps, 0.0,
                                                                   0,
                                                                   0, queue_object.guidance_scale,
@@ -373,8 +393,8 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                                                                   queue_object.height, queue_object.width,
                                                                   queue_object.sampler_name)
             else:
-                image = Image.open(requests.get(queue_object.init_image.url, stream=True).raw).convert('RGB')
-                mask = Image.open(requests.get(queue_object.mask_image.url, stream=True).raw).convert('RGB')
+                image = queue_object.init_image_data # Image.open(requests.get(queue_object.init_image.url, stream=True).raw).convert('RGB')
+                mask = queue_object.mask_image_data # Image.open(requests.get(queue_object.mask_image.url, stream=True).raw).convert('RGB')
                 samples, seed = model.inpaint(queue_object.prompt, queue_object.negative, image, mask, queue_object.steps, 0.0,
                                                               1, 1, queue_object.guidance_scale,
                                                               denoising_strength=queue_object.strength,
@@ -425,9 +445,26 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             Thread(target=upload_dream, daemon=True).start()
 
         except Exception as e:
-            embed = discord.Embed(title='txt2img failed', description=f'{e}\n{traceback.print_exc()}',
-                                  color=embed_color)
+            description=f'{e}\n{traceback.print_exc()}'
+            embed = discord.Embed(title='txt2img failed', description=description, color=embed_color)
             dream_event_loop.create_task(queue_object.ctx.channel.send(embed=embed))
+            if 'CUDA error:' in description:
+                # Restart program completely
+                self.dream_queue = []
+                self.upload_queue = []
+
+                self.bot.close()
+
+                try:
+                    p = psutil.Process(os.getpid())
+                    for handler in p.get_open_files() + p.connections():
+                        os.close(handler.fd)
+                except Exception as e:
+                    logging.error(e)
+
+                python = sys.executable
+                os.execl(python, python, *sys.argv)
+
         if self.dream_queue:
             # event_loop.create_task(self.process_dream(self.queue.pop(0)))
             self.dream(dream_event_loop, self.dream_queue.pop(0))

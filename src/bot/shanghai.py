@@ -30,7 +30,7 @@ class Shanghai(commands.Bot, ABC):
             try:
                 # Check if the message from Shanghai was actually a generation
                 # if message.embeds[0].fields[0].name == 'react':
-                if 'Dreaming - Queue Position:' not in message.content:
+                if message.content.startswith('<@') and 'Dreaming - Queue Position:' not in message.content:
                     await message.add_reaction('❌')
                     if '``/dream prompt:' in message.content:
                         await message.add_reaction('🔁')
@@ -55,7 +55,7 @@ class Shanghai(commands.Bot, ABC):
                     # if message.embeds[0].fields[0].name == 'command':
                     if '``/dream prompt:' in message.content:
                         # command = message.embeds[0].fields[0].value
-                        command = message.content
+                        command = '``/dream ' + self.find_between(message.content, '``/dream ', '``') + '``'
                         # messageReference = await self.get_channel(ctx.channel_id).fetch_message(message.reference.message_id)
                         ctx.author = ctx.member
                         ctx.channel = self.get_channel(ctx.channel_id)
@@ -63,60 +63,68 @@ class Shanghai(commands.Bot, ABC):
                         class image_url:
                             url: str
 
-                        prompt = ''
-                        negative = ''
-                        strength = 0.75
-                        batch = 1
-                        init_image = image_url()
-                        mask_image = image_url()
+                        prompt = self.get_param(command, 'prompt')
 
-                        if ' negative:' in command:
-                            prompt = self.find_between(command, '``/dream prompt:', ' negative:')
-                            negative = self.find_between(command, ' negative:', ' checkpoint:')
-                            if negative == '-': negative = ''
-                        else:
-                            prompt = self.find_between(command, '``/dream prompt:', ' checkpoint:')
-                            negative = ''
+                        negative = self.get_param(command, 'negative')
+                        if negative == '-': negative = ''
 
-                        if ' mask_image:' in command:
-                            init_image.url = self.find_between(command, ' init_image:', ' mask_image:')
-                            mask_image.url = self.find_between(command, ' mask_image:', ' strength:')
-                        else:
-                            init_image.url = self.find_between(command, ' init_image:', ' strength:')
-                            mask_image.url = ''
-
-                        if init_image.url == '': init_image = None
-                        if mask_image.url == '': mask_image = None
+                        checkpoint = self.get_param(command, 'checkpoint')
+                        if checkpoint == '': checkpoint = 'stable_diffusion'
 
                         try:
-                            guidance_scale = float(self.find_between(command, ' guidance_scale:', ' steps:'))
+                            height = int(self.get_param(command, 'height'))
+                        except:
+                            height = 512
+
+                        try:
+                            width = int(self.get_param(command, 'width'))
+                        except:
+                            width = 512
+
+                        try:
+                            guidance_scale = float(self.get_param(command, 'guidance_scale'))
                         except:
                             guidance_scale = 7.0
 
-                        if ' batch:' in command:
-                            try:
-                                strength = float(self.find_between(command, ' strength:', ' batch:'))
-                            except:
-                                strength = None
-                            batch = int(self.find_between(command, ' batch:', '``'))
-                            if batch == 0: batch = 1
-                        else:
-                            try:
-                                strength = float(self.find_between(command, ' strength:', '``'))
-                            except:
-                                strength = None
+                        try:
+                            step = int(self.get_param(command, 'steps'))
+                        except:
+                            step = 20
+
+                        try:
+                            sampler = self.get_param(command, 'sampler')
+                        except:
+                            sampler = 'ddim'
+
+                        seed = -1
+
+                        try:
+                            strength = float(self.get_param(command, 'strength'))
+                        except:
+                            strength = 0.75
+
+                        try:
+                            batch = int(self.get_param(command, 'batch'))
+                        except:
                             batch = 1
+
+                        init_image = image_url()
+                        mask_image = image_url()
+                        init_image.url = self.get_param_url(command, 'init_image')
+                        mask_image.url = self.get_param_url(command, 'mask_image')
+                        if init_image.url == '': init_image = None
+                        if mask_image.url == '': mask_image = None
 
                         await _stableCog.dream_handler(ctx=ctx,
                             prompt=prompt,
                             negative=negative,
-                            checkpoint=self.find_between(command, ' checkpoint:', ' height:'),
-                            height=int(self.find_between(command, ' height:', ' width:')),
-                            width=int(self.find_between(command, ' width:', ' guidance_scale:')),
+                            checkpoint=checkpoint,
+                            height=height,
+                            width=width,
                             guidance_scale=guidance_scale,
-                            steps=int(self.find_between(command, ' steps:', ' sampler:')),
-                            sampler=self.find_between(command, ' sampler:', ' seed:'),
-                            seed=-1,
+                            steps=step,
+                            sampler=sampler,
+                            seed=seed,
                             init_image=init_image,
                             mask_image=mask_image,
                             strength=strength,
@@ -125,6 +133,18 @@ class Shanghai(commands.Bot, ABC):
                         # cog.dream_handler
                 # except:
                 #     pass
+
+    def get_param_url(self, command, param):
+        return self.find_between(command, f'{param}:', ' ')
+
+    def get_param(self, command, param):
+        result = self.find_between(command, f'{param}:', ':')
+        if result == '':
+            result = self.find_between(command, f'{param}:', '``')
+        else:
+            result = result.rsplit(' ', 1)[0]
+
+        return result
 
     def find_between(self, s, first, last):
         try:
