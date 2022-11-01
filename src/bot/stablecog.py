@@ -94,6 +94,12 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                 self.checkpoint_anime = checkpoint
         print("Default anime checkpoint: " + self.checkpoint_anime.name)
 
+        self.checkpoint_inpaint = self.checkpoint_main
+        for checkpoint in self.checkpoints:
+            if checkpoint.name == 'stable_diffusion_inpainting':
+                self.checkpoint_inpaint = checkpoint
+        print("Default inpaint checkpoint: " + self.checkpoint_inpaint.name)
+
         # for checkpoint in self.checkpoints:
         #     checkpoint_names.append(checkpoint.name)
 
@@ -276,6 +282,8 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             checkpoint = self.checkpoints[0].name
             if 'anime' in prompt or 'waifu' in prompt:
                 checkpoint = self.checkpoint_anime.name
+            elif mask_image:
+                checkpoint = self.checkpoint_inpaint.name
 
         # Set sampler
         if sampler == None:
