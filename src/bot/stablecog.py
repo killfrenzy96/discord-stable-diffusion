@@ -312,7 +312,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             if negative != '':
                 command_str += f' negative:{negative}'
 
-            command_str += f'checkpoint:{checkpoint} height:{height} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed} batch:{batch}'
+            command_str += f' checkpoint:{checkpoint} height:{height} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed} batch:{batch}'
 
             if init_image:
                 command_str = command_str + f' init_image:{init_image.url}'
