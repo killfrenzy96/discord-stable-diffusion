@@ -303,6 +303,9 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         if guidance_scale == None: guidance_scale = 7.0
         if guidance_scale <= 1.0: guidance_scale = 1.01
 
+        if batch < 1: batch = 1
+        if batch > 8: batch = 8
+
         # Setup command string
         def get_command_str():
             command_str = '/dream'
@@ -333,7 +336,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             if queue_object.ctx.author.id == ctx.author.id:
                 user_already_in_queue += 1
 
-        if user_already_in_queue > 2:
+        if user_already_in_queue > 4:
             content=f'<@{ctx.author.id}> Please wait for your current images to finish generating before generating a new image'
             ephemeral=True
 
