@@ -113,6 +113,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         self.dream_event_loop = asyncio.get_event_loop()
         self.upload_event_loop = asyncio.get_event_loop()
         self.dream_queue = []
+        self.dream_queue_low = []
         self.upload_queue = []
         self.bot = bot
 
@@ -204,7 +205,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         int,
         description='The amount of steps to sample the model',
         required=False,
-        choices=[x for x in range(5, 51, 5)]
+        default=20
     )
     @option(
         'sampler',
@@ -242,7 +243,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         int,
         description='The amount of images to generate',
         required=False,
-        choices=[x for x in range(1, 9, 1)],
+        choices=[x for x in range(1, 17, 1)],
         default=1
     )
     async def dream_handler(self, ctx: discord.ApplicationContext, *, prompt: str,
@@ -304,7 +305,10 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         if guidance_scale <= 1.0: guidance_scale = 1.01
 
         if batch < 1: batch = 1
-        if batch > 8: batch = 8
+        if batch > 10: batch = 10
+
+        if steps < 2: steps = 2
+        if steps > 50: steps = 50
 
         # Setup command string
         def get_command_str():
@@ -331,12 +335,16 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         content = ''
         ephemeral = False
 
-        user_already_in_queue = 0
+        user_already_in_queue = 0.0
         for queue_object in self.dream_queue:
             if queue_object.ctx.author.id == ctx.author.id:
                 user_already_in_queue += 1
 
-        if user_already_in_queue > 4:
+        for queue_object in self.dream_queue_low:
+            if queue_object.ctx.author.id == ctx.author.id:
+                user_already_in_queue += 0.2
+
+        if user_already_in_queue > 3:
             content=f'<@{ctx.author.id}> Please wait for your current images to finish generating before generating a new image'
             ephemeral=True
 
@@ -365,7 +373,9 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                 seed += 1
                 batch_count += 1
                 command_str = get_command_str()
-                self.dream_queue.append(DreamQueueObject(
+
+                # low priority for batched images
+                self.dream_queue_low.append(DreamQueueObject(
                     ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
                     strength, init_image, mask_image, sampler, command_str, True, init_image_data, mask_image_data
                 ))
@@ -379,7 +389,10 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         try:
             await ctx.send_response(content=content, ephemeral=ephemeral)
         except:
-            await ctx.channel.send(content)
+            try:
+                await ctx.reply(content)
+            except:
+                await ctx.channel.send(content)
 
     async def process_dream(self, dream_queue_object: DreamQueueObject):
         if self.dream_thread.is_alive():
@@ -467,6 +480,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             if 'CUDA error:' in description:
                 # Restart program completely
                 self.dream_queue = []
+                self.dream_queue_low = []
                 self.upload_queue = []
 
                 self.bot.close()
@@ -484,6 +498,9 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         if self.dream_queue:
             # event_loop.create_task(self.process_dream(self.queue.pop(0)))
             self.dream(dream_event_loop, self.dream_queue.pop(0))
+
+        if self.dream_queue_low:
+            self.dream(dream_event_loop, self.dream_queue_low.pop(0))
 
     async def process_upload(self, upload_queue_object: UploadQueueObject):
         if self.upload_thread.is_alive():
