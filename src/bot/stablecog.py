@@ -206,7 +206,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         int,
         description='The amount of steps to sample the model',
         required=False,
-        default=20
+        default=[x for x in range(2, 51, 1)]
     )
     @option(
         'sampler',
