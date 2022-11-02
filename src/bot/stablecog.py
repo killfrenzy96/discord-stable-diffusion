@@ -1,3 +1,4 @@
+from dis import disco
 import traceback
 from asyncio import AbstractEventLoop
 from threading import Thread
@@ -30,21 +31,21 @@ embed_color = discord.Colour.from_rgb(215, 195, 134)
 class DreamQueueObject:
     def __init__(self, ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed, strength,
                  init_image, mask_image, sampler_name, command_str, is_batch, init_image_data = None, mask_image_data = None):
-        self.ctx = ctx
-        self.checkpoint = checkpoint
-        self.prompt = prompt
-        self.negative = negative
-        self.height = height
-        self.width = width
-        self.guidance_scale = guidance_scale
-        self.steps = steps
-        self.seed = seed
-        self.strength = strength
-        self.init_image = init_image
-        self.mask_image = mask_image
-        self.sampler_name = sampler_name
-        self.command_str = command_str
-        self.is_batch = is_batch
+        self.ctx: discord.ApplicationContext | discord.Message = ctx
+        self.checkpoint: str = checkpoint
+        self.prompt: str = prompt
+        self.negative: str = negative
+        self.height: int = height
+        self.width: int = width
+        self.guidance_scale: float = guidance_scale
+        self.steps: int = steps
+        self.seed: int = seed
+        self.strength: float = strength
+        self.init_image: discord.Attachment = init_image
+        self.mask_image: discord.Attachment = mask_image
+        self.sampler_name: str = sampler_name
+        self.command_str: str = command_str
+        self.is_batch: bool = is_batch
 
         self.init_image_data = init_image_data
         self.mask_image_data = mask_image_data
@@ -246,7 +247,8 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         choices=[x for x in range(1, 13, 1)],
         default=1
     )
-    async def dream_handler(self, ctx: discord.ApplicationContext, *, prompt: str,
+    async def dream_handler(self, ctx: discord.ApplicationContext | discord.Message, *,
+                            prompt: str,
                             negative: Optional[str] = '',
                             checkpoint: Optional[str] = None,
                             height: Optional[int] = 512,
@@ -350,6 +352,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
         else:
             queue_length = len(self.dream_queue)
+            if self.dream_thread.is_alive(): queue_length += 1
 
             command_str = get_command_str()
             print(command_str)

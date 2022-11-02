@@ -43,7 +43,7 @@ class Shanghai(commands.Bot, ABC):
             if channel == None:
                 channel = await self.fetch_channel(ctx.channel_id)
 
-            message = await channel.fetch_message(ctx.message_id)
+            message: discord.Message = await channel.fetch_message(ctx.message_id)
 
             author = message.author
             if author == None:
@@ -63,7 +63,7 @@ class Shanghai(commands.Bot, ABC):
             if channel == None:
                 channel = await self.fetch_channel(ctx.channel_id)
 
-            message = await channel.fetch_message(ctx.message_id)
+            message: discord.Message = await channel.fetch_message(ctx.message_id)
 
             user = ctx.member
             if user == None:
