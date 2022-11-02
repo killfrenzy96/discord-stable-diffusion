@@ -366,22 +366,37 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             if mask_image is not None and mask_image.url != '':
                 mask_image_data = Image.open(requests.get(mask_image.url, stream=True).raw).convert('RGB')
 
-            await self.process_dream(DreamQueueObject(
-                ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
-                strength, init_image, mask_image, sampler, command_str, False, init_image_data, mask_image_data
-            ))
-
-            batch_count = 1
-            while batch_count < batch:
-                seed += 1
-                batch_count += 1
-                command_str = get_command_str()
-
-                # low priority for batched images
-                self.dream_queue_low.append(DreamQueueObject(
+            if batch == 1:
+                await self.process_dream(DreamQueueObject(
                     ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
-                    strength, init_image, mask_image, sampler, command_str, True, init_image_data, mask_image_data
+                    strength, init_image, mask_image, sampler, command_str, False, init_image_data, mask_image_data
                 ))
+            else:
+                # Lowered priority for batched images
+                queue_length += len(self.dream_queue_low)
+
+                if self.dream_thread.is_alive() == False:
+                    await self.process_dream(DreamQueueObject(
+                        ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
+                        strength, init_image, mask_image, sampler, command_str, False, init_image_data, mask_image_data
+                    ))
+                else:
+                    self.dream_queue_low.append(DreamQueueObject(
+                        ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
+                        strength, init_image, mask_image, sampler, command_str, True, init_image_data, mask_image_data
+                    ))
+
+                batch_count = 1
+                while batch_count < batch:
+                    seed += 1
+                    batch_count += 1
+                    command_str = get_command_str()
+
+                    # low priority for batched images
+                    self.dream_queue_low.append(DreamQueueObject(
+                        ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
+                        strength, init_image, mask_image, sampler, command_str, True, init_image_data, mask_image_data
+                    ))
 
             # content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``'
             content=f'<@{ctx.author.id}> Dreaming - Queue Position: ``{queue_length}``'
