@@ -346,7 +346,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             if queue_object.ctx.author.id == ctx.author.id:
                 user_already_in_queue += 0.2
 
-        if user_already_in_queue > 3:
+        if user_already_in_queue > 3 - (batch * 0.1):
             content=f'<@{ctx.author.id}> Please wait for your current images to finish generating before generating a new image'
             ephemeral=True
 
