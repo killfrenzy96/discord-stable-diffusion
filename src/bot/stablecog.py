@@ -27,6 +27,8 @@ import src.bot.shanghai
 embed_color = discord.Colour.from_rgb(215, 195, 134)
 # checkpoint_names = []
 
+batch_max = 12
+steps_max = 50
 
 class DreamQueueObject:
     def __init__(self, ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed, strength,
@@ -199,14 +201,13 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         'guidance_scale',
         float,
         description='Classifier-Free Guidance scale',
-        required=False,
+        required=False
     )
     @option(
         'steps',
         int,
         description='The amount of steps to sample the model',
-        required=False,
-        default=[x for x in range(2, 51, 1)]
+        required=False
     )
     @option(
         'sampler',
@@ -244,8 +245,16 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         int,
         description='The amount of images to generate',
         required=False,
-        choices=[x for x in range(1, 17, 1)],
+        choices=[x for x in range(1, batch_max + 1, 1)],
         default=1
+    )
+    @option(
+        'batch_type',
+        str,
+        description='What value change within the batched images',
+        required=False,
+        choices=['seed', 'steps', 'guidance_scale'],
+        default='seed'
     )
     async def dream_handler(self, ctx: discord.ApplicationContext | discord.Message, *,
                             prompt: str,
@@ -260,7 +269,8 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                             strength: Optional[float] = None,
                             init_image: Optional[discord.Attachment] = None,
                             mask_image: Optional[discord.Attachment] = None,
-                            batch: Optional[int] = 1):
+                            batch: Optional[int] = 1,
+                            batch_type: Optional[str] = 'seed'):
         print(f'Request -- {ctx.author.name}#{ctx.author.discriminator}')
 
         if seed == -1:
@@ -307,10 +317,13 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         if guidance_scale <= 1.0: guidance_scale = 1.01
 
         if batch < 1: batch = 1
-        if batch > 16: batch = 16
+        if batch > batch_max: batch = batch_max
 
         if steps < 2: steps = 2
         if steps > 50: steps = 50
+
+        if batch_type == '':
+            batch_type = 'seed'
 
         # Setup command string
         def get_command_str():
@@ -321,7 +334,12 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             if negative != '':
                 command_str += f' negative:{negative}'
 
-            command_str += f' checkpoint:{checkpoint} height:{height} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed} batch:{batch}'
+            command_str += f' checkpoint:{checkpoint} height:{height} width:{width} guidance_scale:{guidance_scale} steps:{steps} sampler:{sampler} seed:{seed}'
+
+            if batch > 1:
+                command_str = command_str + f' batch:{batch}'
+                if batch_type != 'seed':
+                    command_str = command_str + f' batch_type:{batch_type}'
 
             if init_image:
                 command_str = command_str + f' init_image:{init_image.url}'
@@ -332,7 +350,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             if init_image or mask_image:
                 command_str = command_str + f' strength:{strength}'
 
-            return command_str
+            return f'``{command_str}``'
 
         content = ''
         ephemeral = False
@@ -383,14 +401,30 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                 else:
                     self.dream_queue_low.append(DreamQueueObject(
                         ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
-                        strength, init_image, mask_image, sampler, command_str, True, init_image_data, mask_image_data
+                        strength, init_image, mask_image, sampler, command_str, False, init_image_data, mask_image_data
                     ))
 
                 batch_count = 1
+                steps_original = steps
                 while batch_count < batch:
-                    seed += 1
+                    if batch_type == 'seed':
+                        seed += 1
+                        command_str = f'seed:{seed}'
+                    elif batch_type == 'steps':
+                        if steps_original + (batch_max * 2) > steps_max:
+                            steps -= 2
+                        else:
+                            steps += 2
+                        command_str = f'steps:{steps}'
+                    elif batch_type == 'guidance_scale':
+                        guidance_scale += 0.5
+                        command_str = f'guidance_scale:{guidance_scale}'
+                    else:
+                        seed += 1
+                        command_str = f'guidance_scale:{seed}'
+
                     batch_count += 1
-                    command_str = get_command_str()
+                    command_str = f'``#{batch_count}`` - ``{command_str}``'
 
                     # low priority for batched images
                     self.dream_queue_low.append(DreamQueueObject(
@@ -474,10 +508,10 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                         embed = None
 
                         content = ''
-                        if queue_object.is_batch:
-                            content = f'<@{queue_object.ctx.author.id}>'
+                        if queue_object.command_str:
+                            content = f'<@{queue_object.ctx.author.id}> {queue_object.command_str}'
                         else:
-                            content = f'<@{queue_object.ctx.author.id}> ``{queue_object.command_str}``'
+                            content = f'<@{queue_object.ctx.author.id}>'
 
                         file = discord.File(fp=buffer, filename=f'{seed}.png')
 

@@ -130,6 +130,11 @@ class Shanghai(commands.Bot, ABC):
                         except:
                             batch = 1
 
+                        try:
+                            batch_type = self.sh_get_param(command, 'batch_type')
+                        except:
+                            batch_type = 'seed'
+
                         init_image = image_url()
                         mask_image = image_url()
                         init_image.url = self.sh_get_param_url(command, 'init_image')
@@ -150,7 +155,8 @@ class Shanghai(commands.Bot, ABC):
                             init_image=init_image,
                             mask_image=mask_image,
                             strength=strength,
-                            batch=batch
+                            batch=batch,
+                            batch_type=batch_type
                         )
                         # cog.dream_handler
                 # except:
