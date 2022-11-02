@@ -243,7 +243,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         int,
         description='The amount of images to generate',
         required=False,
-        choices=[x for x in range(1, 17, 1)],
+        choices=[x for x in range(1, 13, 1)],
         default=1
     )
     async def dream_handler(self, ctx: discord.ApplicationContext, *, prompt: str,
@@ -305,7 +305,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         if guidance_scale <= 1.0: guidance_scale = 1.01
 
         if batch < 1: batch = 1
-        if batch > 10: batch = 10
+        if batch > 12: batch = 12
 
         if steps < 2: steps = 2
         if steps > 50: steps = 50
