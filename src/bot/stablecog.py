@@ -357,11 +357,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
         # limit batch size
         if batch_type != 'mixed':
-            steps_average = steps
-            if batch_type == 'steps':
-                steps_average += batch * 0.8
-
-            dream_cost = self.get_dream_cost(width, height, steps_average)
+            dream_cost = self.get_dream_cost(width, height, steps)
             if dream_cost * batch > batch_max:
                 batch = int(batch_max / dream_cost)
 
