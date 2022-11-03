@@ -27,8 +27,11 @@ import src.bot.shanghai
 embed_color = discord.Colour.from_rgb(215, 195, 134)
 # checkpoint_names = []
 
-batch_max = 12
+batch_max = 16
 steps_max = 50
+
+batch_mixed_guidance = [5.0,5.0,5.0,5.0,7.0,7.0,7.0,7.0,10.0,10.0,10.0,10.0,14.0,14.0,14.0,14.0]
+batch_mixed_steps = [20,30,40,50,20,30,40,50,20,30,40,50,20,30,40,50]
 
 class DreamQueueObject:
     def __init__(self, ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed, strength,
@@ -229,6 +232,22 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         description='The strength (0.0 to 1.0) used to apply the prompt to the init_image/mask_image'
     )
     @option(
+        'batch',
+        int,
+        description='The amount of images to generate',
+        required=False,
+        choices=[x for x in range(1, batch_max + 1, 1)],
+        default=1
+    )
+    @option(
+        'batch_type',
+        str,
+        description='What value change within the batched images',
+        required=False,
+        choices=['seed', 'steps', 'guidance_scale', 'mixed'],
+        default='seed'
+    )
+    @option(
         'init_image_attachment',
         discord.Attachment,
         description='The image to initialize the latents with for denoising (attachment)',
@@ -251,22 +270,6 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         str,
         description='The mask image to use for inpainting (URL)',
         required=False,
-    )
-    @option(
-        'batch',
-        int,
-        description='The amount of images to generate',
-        required=False,
-        choices=[x for x in range(1, batch_max + 1, 1)],
-        default=1
-    )
-    @option(
-        'batch_type',
-        str,
-        description='What value change within the batched images',
-        required=False,
-        choices=['seed', 'steps', 'guidance_scale'],
-        default='seed'
     )
     async def dream_handler(self, ctx: discord.ApplicationContext | discord.Message, *,
                             prompt: str,
@@ -345,6 +348,12 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
         if batch_type == '':
             batch_type = 'seed'
+        elif batch_type == 'steps' and steps + ((batch_max - 1) * 2) > steps_max:
+            steps = steps_max - ((batch_max - 1) * 2)
+        elif batch_type == 'mixed':
+            batch = 16
+            steps = batch_mixed_steps[0]
+            guidance_scale = batch_mixed_guidance[0]
 
         # Setup command string
         def get_command_str():
@@ -429,33 +438,46 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                         strength, init_image_url, mask_image_url, sampler, command_str, False, init_image_data, mask_image_data
                     ))
 
-                batch_count = 1
-                steps_original = steps
-                while batch_count < batch:
-                    if batch_type == 'seed':
-                        seed += 1
-                        command_str = f'seed:{seed}'
-                    elif batch_type == 'steps':
-                        if steps_original + (batch_max * 2) > steps_max:
-                            steps -= 2
-                        else:
+                if batch_type == 'mixed':
+                    batch_count = 1
+                    while batch_count < batch:
+                        steps = batch_mixed_steps[batch_count]
+                        guidance_scale = batch_mixed_guidance[batch_count]
+
+                        batch_count += 1
+                        command_str = f'``#{batch_count}`` - ``guidance_scale:{guidance_scale} steps:{steps}``'
+
+                        self.dream_queue_low.append(DreamQueueObject(
+                            ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
+                            strength, init_image_url, mask_image_url, sampler, command_str, True, init_image_data, mask_image_data
+                        ))
+
+                else:
+                    batch_count = 1
+                    while batch_count < batch:
+                        if batch_type == 'seed':
+                            seed += 1
+                            command_str = f'seed:{seed}'
+
+                        elif batch_type == 'steps':
                             steps += 2
-                        command_str = f'steps:{steps}'
-                    elif batch_type == 'guidance_scale':
-                        guidance_scale += 1.0
-                        command_str = f'guidance_scale:{guidance_scale}'
-                    else:
-                        seed += 1
-                        command_str = f'guidance_scale:{seed}'
+                            command_str = f'steps:{steps}'
 
-                    batch_count += 1
-                    command_str = f'``#{batch_count}`` - ``{command_str}``'
+                        elif batch_type == 'guidance_scale':
+                            guidance_scale += 1.0
+                            command_str = f'guidance_scale:{guidance_scale}'
 
-                    # low priority for batched images
-                    self.dream_queue_low.append(DreamQueueObject(
-                        ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
-                        strength, init_image_url, mask_image_url, sampler, command_str, True, init_image_data, mask_image_data
-                    ))
+                        else:
+                            seed += 1
+                            command_str = f'seed:{seed}'
+
+                        batch_count += 1
+                        command_str = f'``#{batch_count}`` - ``{command_str}``'
+
+                        self.dream_queue_low.append(DreamQueueObject(
+                            ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
+                            strength, init_image_url, mask_image_url, sampler, command_str, True, init_image_data, mask_image_data
+                        ))
 
             # content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``'
             content=f'<@{ctx.author.id}> Dreaming - Queue Position: ``{queue_length}``'
@@ -481,7 +503,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
     def dream(self, dream_event_loop: AbstractEventLoop, queue_object: DreamQueueObject):
         try:
-            start_time = time.time()
+            # start_time = time.time()
 
             model: Text2Image = self.load_model(queue_object.checkpoint)
 
@@ -493,8 +515,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             elif queue_object.init_image_data is not None:
                 image = queue_object.init_image_data # Image.open(requests.get(queue_object.init_image.url, stream=True).raw).convert('RGB')
                 samples, seed = model.translation(queue_object.prompt, queue_object.negative, image, queue_object.steps, 0.0,
-                                                                  0,
-                                                                  0, queue_object.guidance_scale,
+                                                                  0, 0, queue_object.guidance_scale,
                                                                   queue_object.strength, queue_object.seed,
                                                                   queue_object.height, queue_object.width,
                                                                   queue_object.sampler_name)
