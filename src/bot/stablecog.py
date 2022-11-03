@@ -32,7 +32,7 @@ steps_max = 50
 
 class DreamQueueObject:
     def __init__(self, ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed, strength,
-                 init_image, mask_image, sampler_name, command_str, is_batch, init_image_data = None, mask_image_data = None):
+                 init_image_url, mask_image_url, sampler_name, command_str, is_batch, init_image_data = None, mask_image_data = None):
         self.ctx: discord.ApplicationContext | discord.Message = ctx
         self.checkpoint: str = checkpoint
         self.prompt: str = prompt
@@ -43,8 +43,8 @@ class DreamQueueObject:
         self.steps: int = steps
         self.seed: int = seed
         self.strength: float = strength
-        self.init_image: discord.Attachment = init_image
-        self.mask_image: discord.Attachment = mask_image
+        self.init_image_url: str = init_image_url
+        self.mask_image_url: str = mask_image_url
         self.sampler_name: str = sampler_name
         self.command_str: str = command_str
         self.is_batch: bool = is_batch
@@ -229,15 +229,27 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         description='The strength (0.0 to 1.0) used to apply the prompt to the init_image/mask_image'
     )
     @option(
-        'init_image',
+        'init_image_attachment',
         discord.Attachment,
-        description='The image to initialize the latents with for denoising',
+        description='The image to initialize the latents with for denoising (attachment)',
         required=False,
     )
     @option(
-        'mask_image',
+        'init_image_url',
         discord.Attachment,
-        description='The mask image to use for inpainting',
+        description='The image to initialize the latents with for denoising (URL)',
+        required=False,
+    )
+    @option(
+        'mask_image_attachment',
+        discord.Attachment,
+        description='The mask image to use for inpainting (attachment)',
+        required=False,
+    )
+    @option(
+        'mask_image_url',
+        discord.Attachment,
+        description='The mask image to use for inpainting (URL)',
         required=False,
     )
     @option(
@@ -267,8 +279,10 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                             sampler: Optional[str] = None,
                             seed: Optional[int] = -1,
                             strength: Optional[float] = None,
-                            init_image: Optional[discord.Attachment] = None,
-                            mask_image: Optional[discord.Attachment] = None,
+                            init_image_attachment: Optional[discord.Attachment] = None,
+                            init_image_url: Optional[str] = None,
+                            mask_image_attachment: Optional[discord.Attachment] = None,
+                            mask_image_url: Optional[str] = None,
                             batch: Optional[int] = 1,
                             batch_type: Optional[str] = 'seed'):
         print(f'Request -- {ctx.author.name}#{ctx.author.discriminator}')
@@ -290,12 +304,19 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         if checkpointFound == False:
             checkpoint = None
 
+        # Image URL
+        if init_image_attachment:
+            init_image_url = init_image_attachment.url
+
+        if mask_image_attachment:
+            mask_image_url = mask_image_attachment.url
+
         # Checkpoint autoselect
         if checkpoint == None:
             checkpoint = self.checkpoints[0].name
             if 'anime' in prompt or 'waifu' in prompt:
                 checkpoint = self.checkpoint_anime.name
-            elif mask_image:
+            elif mask_image_url:
                 checkpoint = self.checkpoint_inpaint.name
 
         # Set sampler
@@ -341,13 +362,13 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                 if batch_type != 'seed':
                     command_str = command_str + f' batch_type:{batch_type}'
 
-            if init_image:
-                command_str = command_str + f' init_image:{init_image.url}'
+            if init_image_url:
+                command_str = command_str + f' init_image_url:{init_image_url}'
 
-            if mask_image:
-                command_str = command_str + f' mask_image:{mask_image.url}'
+            if mask_image_url:
+                command_str = command_str + f' mask_image_url:{mask_image_url}'
 
-            if init_image or mask_image:
+            if init_image_url or mask_image_url:
                 command_str = command_str + f' strength:{strength}'
 
             return f'``{command_str}``'
@@ -368,6 +389,10 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             content=f'<@{ctx.author.id}> Please wait for your current images to finish generating before generating a new image'
             ephemeral=True
 
+        elif (init_image_url and init_image_url.startswith('https://cdn.discordapp.com/') == False) or (mask_image_url and mask_image_url.startswith('https://cdn.discordapp.com/') == False):
+            content=f'<@{ctx.author.id}> init_image_url and mask_image_url links must start with https://cdn.discordapp.com/'
+            ephemeral=True
+
         else:
             queue_length = len(self.dream_queue)
             if self.dream_thread.is_alive(): queue_length += 1
@@ -378,16 +403,16 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             init_image_data = None
             mask_image_data = None
 
-            if init_image is not None and init_image.url != '':
-                init_image_data = Image.open(requests.get(init_image.url, stream=True).raw).convert('RGB')
+            if init_image_url != '':
+                init_image_data = Image.open(requests.get(init_image_url, stream=True).raw).convert('RGB')
 
-            if mask_image is not None and mask_image.url != '':
-                mask_image_data = Image.open(requests.get(mask_image.url, stream=True).raw).convert('RGB')
+            if mask_image_url != '':
+                mask_image_data = Image.open(requests.get(init_image_url, stream=True).raw).convert('RGB')
 
             if batch == 1:
                 await self.process_dream(DreamQueueObject(
                     ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
-                    strength, init_image, mask_image, sampler, command_str, False, init_image_data, mask_image_data
+                    strength, init_image_url, mask_image_url, sampler, command_str, False, init_image_data, mask_image_data
                 ))
             else:
                 # Lowered priority for batched images
@@ -396,12 +421,12 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                 if self.dream_thread.is_alive() == False:
                     await self.process_dream(DreamQueueObject(
                         ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
-                        strength, init_image, mask_image, sampler, command_str, False, init_image_data, mask_image_data
+                        strength, init_image_url, mask_image_url, sampler, command_str, False, init_image_data, mask_image_data
                     ))
                 else:
                     self.dream_queue_low.append(DreamQueueObject(
                         ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
-                        strength, init_image, mask_image, sampler, command_str, False, init_image_data, mask_image_data
+                        strength, init_image_url, mask_image_url, sampler, command_str, False, init_image_data, mask_image_data
                     ))
 
                 batch_count = 1
@@ -417,7 +442,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                             steps += 2
                         command_str = f'steps:{steps}'
                     elif batch_type == 'guidance_scale':
-                        guidance_scale += 0.5
+                        guidance_scale += 1.0
                         command_str = f'guidance_scale:{guidance_scale}'
                     else:
                         seed += 1
@@ -429,7 +454,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                     # low priority for batched images
                     self.dream_queue_low.append(DreamQueueObject(
                         ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed,
-                        strength, init_image, mask_image, sampler, command_str, True, init_image_data, mask_image_data
+                        strength, init_image_url, mask_image_url, sampler, command_str, True, init_image_data, mask_image_data
                     ))
 
             # content=f'Dreaming for <@{ctx.author.id}> - Queue Position: ``{len(self.queue)}`` - ``{command_str}``'
@@ -460,12 +485,12 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
             model: Text2Image = self.load_model(queue_object.checkpoint)
 
-            if (queue_object.init_image is None) and (queue_object.mask_image is None):
+            if (queue_object.init_image_data is None) and (queue_object.mask_image_data is None):
                 samples, seed = model.dream(queue_object.prompt, queue_object.negative, queue_object.steps, False, False, 0.0,
                                                             1, 1, queue_object.guidance_scale, queue_object.seed,
                                                             queue_object.height, queue_object.width, False,
                                                             queue_object.sampler_name)
-            elif queue_object.init_image is not None:
+            elif queue_object.init_image_data is not None:
                 image = queue_object.init_image_data # Image.open(requests.get(queue_object.init_image.url, stream=True).raw).convert('RGB')
                 samples, seed = model.translation(queue_object.prompt, queue_object.negative, image, queue_object.steps, 0.0,
                                                                   0,

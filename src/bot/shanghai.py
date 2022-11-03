@@ -135,12 +135,10 @@ class Shanghai(commands.Bot, ABC):
                         except:
                             batch_type = 'seed'
 
-                        init_image = image_url()
-                        mask_image = image_url()
-                        init_image.url = self.sh_get_param_url(command, 'init_image')
-                        mask_image.url = self.sh_get_param_url(command, 'mask_image')
-                        if init_image.url == '': init_image = None
-                        if mask_image.url == '': mask_image = None
+                        init_image_url = self.sh_get_param_url(command, 'init_image_url')
+                        mask_image_url = self.sh_get_param_url(command, 'mask_image_url')
+                        if init_image_url == '': init_image_url = None
+                        if mask_image_url == '': mask_image_url = None
 
                         await _stableCog.dream_handler(ctx=message,
                             prompt=prompt,
@@ -152,8 +150,8 @@ class Shanghai(commands.Bot, ABC):
                             steps=step,
                             sampler=sampler,
                             seed=seed,
-                            init_image=init_image,
-                            mask_image=mask_image,
+                            init_image_url=init_image_url,
+                            mask_image_url=mask_image_url,
                             strength=strength,
                             batch=batch,
                             batch_type=batch_type
