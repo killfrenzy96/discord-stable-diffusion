@@ -236,7 +236,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
     )
     @option(
         'init_image_url',
-        discord.Attachment,
+        str,
         description='The image to initialize the latents with for denoising (URL)',
         required=False,
     )
@@ -248,7 +248,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
     )
     @option(
         'mask_image_url',
-        discord.Attachment,
+        str,
         description='The mask image to use for inpainting (URL)',
         required=False,
     )
