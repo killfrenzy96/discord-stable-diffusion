@@ -30,8 +30,8 @@ embed_color = discord.Colour.from_rgb(215, 195, 134)
 batch_max = 16
 steps_max = 50
 
-batch_mixed_guidance = [5.0,5.0,5.0,5.0,7.0,7.0,7.0,7.0,10.0,10.0,10.0,10.0,14.0,14.0,14.0,14.0]
-batch_mixed_steps = [20,30,40,50,20,30,40,50,20,30,40,50,20,30,40,50]
+batch_mixed_guidance = [5.0,5.0,5.0,7.0,7.0,7.0,10.0,10.0,10.0,14.0,14.0,14.0]
+batch_mixed_steps = [20,35,50,20,35,50,20,35,50,20,35,50]
 
 class DreamQueueObject:
     def __init__(self, ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed, strength,
@@ -351,9 +351,13 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         elif batch_type == 'steps' and steps + ((batch - 1) * 2) > steps_max:
             steps = steps_max - ((batch - 1) * 2)
         elif batch_type == 'mixed':
-            batch = 16
+            batch = 12
             steps = batch_mixed_steps[0]
             guidance_scale = batch_mixed_guidance[0]
+
+        dream_cost = self.get_dream_cost(width, height, steps)
+        if dream_cost * batch > batch_max and batch_type != 'mixed':
+            batch = int(batch_max / dream_cost)
 
         # Setup command string
         def get_command_str():
@@ -388,13 +392,13 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         user_already_in_queue = 0.0
         for queue_object in self.dream_queue:
             if queue_object.ctx.author.id == ctx.author.id:
-                user_already_in_queue += 1
+                user_already_in_queue += self.get_dream_cost(queue_object.width, queue_object.height, queue_object.steps)
 
         for queue_object in self.dream_queue_low:
             if queue_object.ctx.author.id == ctx.author.id:
-                user_already_in_queue += 0.2
+                user_already_in_queue += 0.2 * self.get_dream_cost(queue_object.width, queue_object.height, queue_object.steps)
 
-        if user_already_in_queue > 3 - (batch * 0.1):
+        if user_already_in_queue > 3 - (batch * dream_cost * 0.1):
             content=f'<@{ctx.author.id}> Please wait for your current images to finish generating before generating a new image'
             ephemeral=True
 
@@ -607,6 +611,12 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             self.upload_thread = Thread(target=self.upload,
                                     args=(self.upload_event_loop, upload_queue_object))
             self.upload_thread.start()
+
+    def get_dream_cost(self, width, height, steps):
+        dream_cost = 1.0
+        dream_cost *= max(1.0, (steps / steps_max) / (20 / steps_max))
+        dream_cost *= max(1.0, (width * height) / (512 * 512))
+        return dream_cost
 
     def upload(self, upload_event_loop: AbstractEventLoop, upload_queue_object: UploadQueueObject):
         upload_event_loop.create_task(
