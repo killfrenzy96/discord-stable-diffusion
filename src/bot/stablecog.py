@@ -282,12 +282,12 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                             sampler: Optional[str] = None,
                             seed: Optional[int] = -1,
                             strength: Optional[float] = None,
+                            batch: Optional[int] = 1,
+                            batch_type: Optional[str] = 'seed',
                             init_image_attachment: Optional[discord.Attachment] = None,
                             init_image_url: Optional[str] = None,
                             mask_image_attachment: Optional[discord.Attachment] = None,
-                            mask_image_url: Optional[str] = None,
-                            batch: Optional[int] = 1,
-                            batch_type: Optional[str] = 'seed'):
+                            mask_image_url: Optional[str] = None):
         print(f'Request -- {ctx.author.name}#{ctx.author.discriminator}')
 
         if seed == -1:
