@@ -403,10 +403,10 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             init_image_data = None
             mask_image_data = None
 
-            if init_image_url != '':
+            if init_image_url:
                 init_image_data = Image.open(requests.get(init_image_url, stream=True).raw).convert('RGB')
 
-            if mask_image_url != '':
+            if mask_image_url:
                 mask_image_data = Image.open(requests.get(init_image_url, stream=True).raw).convert('RGB')
 
             if batch == 1:
