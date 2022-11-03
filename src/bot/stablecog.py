@@ -348,8 +348,8 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
         if batch_type == '':
             batch_type = 'seed'
-        elif batch_type == 'steps' and steps + ((batch_max - 1) * 2) > steps_max:
-            steps = steps_max - ((batch_max - 1) * 2)
+        elif batch_type == 'steps' and steps + ((batch - 1) * 2) > steps_max:
+            steps = steps_max - ((batch - 1) * 2)
         elif batch_type == 'mixed':
             batch = 16
             steps = batch_mixed_steps[0]
