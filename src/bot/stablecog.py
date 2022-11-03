@@ -344,7 +344,9 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         if batch > batch_max: batch = batch_max
 
         if steps < 2: steps = 2
-        if steps > 50: steps = 50
+        if steps > 120: steps = 120
+
+        dream_cost = self.get_dream_cost(width, height, steps)
 
         if batch_type == '':
             batch_type = 'seed'
@@ -354,10 +356,13 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             batch = 12
             steps = batch_mixed_steps[0]
             guidance_scale = batch_mixed_guidance[0]
+            dream_cost = self.get_dream_cost(width, height, sum(batch_mixed_steps) / len(batch_mixed_steps))
 
-        # limit batch size
-        dream_cost = self.get_dream_cost(width, height, steps)
         if batch_type != 'mixed':
+            if dream_cost > 3:
+                steps = int((3.0 / dream_cost) * 120.0)
+                dream_cost = 3
+
             if dream_cost * batch > batch_max:
                 batch = int(batch_max / dream_cost)
 
@@ -400,7 +405,11 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             if queue_object.ctx.author.id == ctx.author.id:
                 user_already_in_queue += 0.2 * self.get_dream_cost(queue_object.width, queue_object.height, queue_object.steps)
 
-        if user_already_in_queue > 3 - (batch * dream_cost * 0.1):
+        dream_cost_total = dream_cost
+        if batch > 1:
+            dream_cost_total *= batch * 0.2
+
+        if user_already_in_queue > 3.2 - dream_cost_total:
             content=f'<@{ctx.author.id}> Please wait for your current images to finish generating before generating a new image'
             ephemeral=True
 
@@ -617,7 +626,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
     def get_dream_cost(self, width, height, steps):
         dream_cost = 1.0
         dream_cost *= max(1.0, steps / 20)
-        dream_cost *= max(1.0, (width * height) / (512 * 512))
+        dream_cost *= pow(max(1.0, (width * height) / (512 * 512)), 1.45)
         return dream_cost
 
     def upload(self, upload_event_loop: AbstractEventLoop, upload_queue_object: UploadQueueObject):
