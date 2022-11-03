@@ -355,9 +355,15 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             steps = batch_mixed_steps[0]
             guidance_scale = batch_mixed_guidance[0]
 
-        dream_cost = self.get_dream_cost(width, height, steps)
-        if dream_cost * batch > batch_max and batch_type != 'mixed':
-            batch = int(batch_max / dream_cost)
+        # limit batch size
+        if batch_type != 'mixed':
+            steps_average = steps
+            if batch_type == 'steps':
+                steps_average += batch * 0.8
+
+            dream_cost = self.get_dream_cost(width, height, steps_average)
+            if dream_cost * batch > batch_max:
+                batch = int(batch_max / dream_cost)
 
         # Setup command string
         def get_command_str():
@@ -614,7 +620,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
     def get_dream_cost(self, width, height, steps):
         dream_cost = 1.0
-        dream_cost *= max(1.0, (steps / steps_max) / (20 / steps_max))
+        dream_cost *= max(1.0, steps / 20)
         dream_cost *= max(1.0, (width * height) / (512 * 512))
         return dream_cost
 
