@@ -27,11 +27,12 @@ import src.bot.shanghai
 embed_color = discord.Colour.from_rgb(215, 195, 134)
 # checkpoint_names = []
 
+queue_max = 3.65
 batch_max = 16
 steps_max = 50
 
 batch_mixed_guidance = [5.0,5.0,5.0,7.0,7.0,7.0,10.0,10.0,10.0,14.0,14.0,14.0]
-batch_mixed_steps = [20,35,50,20,35,50,20,35,50,20,35,50]
+batch_mixed_steps = [20,30,40,20,30,40,20,30,40,20,30,40]
 
 class DreamQueueObject:
     def __init__(self, ctx, checkpoint, prompt, negative, height, width, guidance_scale, steps, seed, strength,
@@ -294,10 +295,8 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             seed = random.randint(0, 0xFFFFFFFF - batch)
 
         # clean prompt input
-        prompt.replace(':', ' ')
-        negative.replace(':', ' ')
-        prompt.replace('`', ' ')
-        negative.replace('`', ' ')
+        prompt = prompt.replace(':', ' ').replace('`', ' ')
+        negative = negative.replace(':', ' ').replace('`', ' ')
 
         # Make sure checkpoint is a valid value
         checkpointFound = False
@@ -346,9 +345,9 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         if steps < 2: steps = 2
         if steps > 120: steps = 120
 
-        dream_cost = self.get_dream_cost(width, height, steps)
+        dream_cost: float = self.get_dream_cost(width, height, steps)
 
-        if batch_type == '':
+        if batch_type == '' or batch_type == None:
             batch_type = 'seed'
         elif batch_type == 'steps' and steps + ((batch - 1) * 2) > steps_max:
             steps = steps_max - ((batch - 1) * 2)
@@ -359,9 +358,12 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             dream_cost = self.get_dream_cost(width, height, sum(batch_mixed_steps) / len(batch_mixed_steps))
 
         if batch_type != 'mixed':
-            if dream_cost > 3:
-                steps = int((3.0 / dream_cost) * 120.0)
-                dream_cost = 3
+            if dream_cost > queue_max:
+                steps_original = steps
+                dream_cost_original = dream_cost
+                steps = int(float(steps) * (queue_max / dream_cost))
+                dream_cost = self.get_dream_cost(width, height, steps)
+                print(f'Dream too costly ({dream_cost_original}/{queue_max}), lowering step size from {steps_original} to {steps}')
 
             if dream_cost * batch > batch_max:
                 batch = int(batch_max / dream_cost)
@@ -409,9 +411,18 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
         if batch > 1:
             dream_cost_total *= batch * 0.2
 
-        if user_already_in_queue > 3.2 - dream_cost_total:
-            content=f'<@{ctx.author.id}> Please wait for your current images to finish generating before generating a new image'
+        print(f'Estimated compute cost: {dream_cost * batch}')
+
+        if user_already_in_queue + dream_cost_total > queue_max:
+            if dream_cost_total > queue_max:
+                if batch_type == 'mixed':
+                    content=f'<@{ctx.author.id}> Please lower the resolution to 512x512 or lower for the mixed batch type'
+                else:
+                    content=f'<@{ctx.author.id}> Dream too complex - Please lower the resolution or step size'
+            else:
+                content=f'<@{ctx.author.id}> Please wait for your current images to finish generating before generating a new image'
             ephemeral=True
+            print(f'Dream rejected: {user_already_in_queue} queued + {dream_cost_total} requested > {queue_max} maximum queue')
 
         elif (init_image_url and init_image_url.startswith('https://cdn.discordapp.com/') == False) or (mask_image_url and mask_image_url.startswith('https://cdn.discordapp.com/') == False):
             content=f'<@{ctx.author.id}> init_image_url and mask_image_url links must start with https://cdn.discordapp.com/'
@@ -626,7 +637,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
     def get_dream_cost(self, width, height, steps):
         dream_cost = 1.0
         dream_cost *= max(1.0, steps / 20)
-        dream_cost *= pow(max(1.0, (width * height) / (512 * 512)), 1.45)
+        dream_cost *= pow(max(1.0, (width * height) / (512 * 512)), 1.5)
         return dream_cost
 
     def upload(self, upload_event_loop: AbstractEventLoop, upload_queue_object: UploadQueueObject):
