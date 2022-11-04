@@ -350,9 +350,14 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             batch_type = 'seed'
 
         elif batch_type == 'steps':
-            # if steps + ((batch - 1) * 2) > 50:
-            #     steps = 50 - ((batch - 1) * 2)
+            steps_original = steps
+            dream_cost_original = dream_cost
+
+            if steps > 58: steps = 58
             dream_cost = self.get_dream_cost(width, height, steps + (batch - 1))
+
+            if steps != steps_original:
+                print(f'Dream too costly ({dream_cost_original}>{queue_max}), lowering step size from {steps_original} to {steps}')
 
         elif batch_type == 'mixed':
             batch = 12
@@ -361,18 +366,26 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             dream_cost = self.get_dream_cost(width, height, sum(batch_mixed_steps) / len(batch_mixed_steps))
 
         if batch_type != 'mixed':
-            batch_original = batch
-            steps_original = steps
-            dream_cost_original = dream_cost
-
             if dream_cost > queue_max:
+                steps_original = steps
+                dream_cost_original = dream_cost
+
                 steps = int(float(steps) * (queue_max / dream_cost))
-                dream_cost = self.get_dream_cost(width, height, steps)
-                print(f'Dream too costly ({dream_cost_original}/{queue_max}), lowering step size from {steps_original} to {steps}')
+                if batch_type == 'steps':
+                    dream_cost = self.get_dream_cost(width, height, steps + (batch - 1))
+                else:
+                    dream_cost = self.get_dream_cost(width, height, steps)
+                print(f'Dream too costly ({dream_cost_original}>{queue_max}), lowering step size from {steps_original} to {steps}')
+
 
             if dream_cost * batch > batch_max:
+                batch_original = batch
+                dream_cost_original = dream_cost
+
                 batch = int(batch_max / dream_cost)
-                print(f'Dream too costly ({dream_cost_original}/{queue_max}), lowering batch from {batch_original} to {batch}')
+                if batch_type == 'steps':
+                    dream_cost = self.get_dream_cost(width, height, steps + (batch - 1))
+                print(f'Batch too costly ({dream_cost_original * batch_original}/{batch_max}), lowering batch from {batch_original} to {batch}')
 
         # Setup command string
         def get_command_str():
