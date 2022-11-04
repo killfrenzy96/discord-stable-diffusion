@@ -29,7 +29,6 @@ embed_color = discord.Colour.from_rgb(215, 195, 134)
 
 queue_max = 3.65
 batch_max = 16
-steps_max = 50
 
 batch_mixed_guidance = [5.0,5.0,5.0,7.0,7.0,7.0,10.0,10.0,10.0,14.0,14.0,14.0]
 batch_mixed_steps = [20,30,40,20,30,40,20,30,40,20,30,40]
@@ -351,8 +350,8 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             batch_type = 'seed'
 
         elif batch_type == 'steps':
-            if steps + ((batch - 1) * 2) > steps_max:
-                steps = steps_max - ((batch - 1) * 2)
+            if steps + ((batch - 1) * 2) > 50:
+                steps = 50 - ((batch - 1) * 2)
             dream_cost = self.get_dream_cost(width, height, steps + (batch - 1))
 
         elif batch_type == 'mixed':
@@ -366,7 +365,12 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
                 steps_original = steps
                 dream_cost_original = dream_cost
                 steps = int(float(steps) * (queue_max / dream_cost))
-                dream_cost = self.get_dream_cost(width, height, steps)
+
+                if batch_type == 'steps':
+                    dream_cost = self.get_dream_cost(width, height, steps + (batch - 1))
+                else:
+                    dream_cost = self.get_dream_cost(width, height, steps)
+
                 print(f'Dream too costly ({dream_cost_original}/{queue_max}), lowering step size from {steps_original} to {steps}')
 
             if dream_cost * batch > batch_max:
