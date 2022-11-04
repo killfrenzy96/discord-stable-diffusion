@@ -365,7 +365,7 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
             steps_original = steps
             dream_cost_original = dream_cost
 
-            if batch_type != 'steps' and dream_cost > queue_max:
+            if dream_cost > queue_max:
                 steps = int(float(steps) * (queue_max / dream_cost))
                 dream_cost = self.get_dream_cost(width, height, steps)
                 print(f'Dream too costly ({dream_cost_original}/{queue_max}), lowering step size from {steps_original} to {steps}')
