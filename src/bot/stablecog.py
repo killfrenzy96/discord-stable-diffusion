@@ -349,8 +349,12 @@ class StableCog(commands.Cog, name='Stable Diffusion', description='Create image
 
         if batch_type == '' or batch_type == None:
             batch_type = 'seed'
-        elif batch_type == 'steps' and steps + ((batch - 1) * 2) > steps_max:
-            steps = steps_max - ((batch - 1) * 2)
+
+        elif batch_type == 'steps':
+            if steps + ((batch - 1) * 2) > steps_max:
+                steps = steps_max - ((batch - 1) * 2)
+            dream_cost = self.get_dream_cost(width, height, steps + (batch - 1))
+
         elif batch_type == 'mixed':
             batch = 12
             steps = batch_mixed_steps[0]
