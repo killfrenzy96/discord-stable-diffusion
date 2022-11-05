@@ -1,3 +1,7 @@
+## Deprecated
+
+I have moved onto using aiyabot as a code base for my customised stable diffusion Discord bot.
+
 # Shanghai - AI Powered Art in a Discord Bot!
 
 <img src=https://cdn.discordapp.com/attachments/971549874514444358/1012400070559277086/1502073419.png?3867929 width=50% height=50%>
@@ -5,11 +9,6 @@
 ### Any questions or need help? Come hop on by to our Discord server!
 
 [![Discord Server](https://discordapp.com/api/guilds/930499730843250783/widget.png?style=banner2)](https://discord.gg/Sx6Spmsgx7)
-
-## Modifications from original fork
-- Implemented loading of waifu diffusion alongside main model
-- Tweaked default config
-- Implemented negative prompts
 
 ## Setup
 Make sure you have the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) installed
