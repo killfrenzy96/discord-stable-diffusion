@@ -1,6 +1,7 @@
 ## Deprecated
 
 I have moved onto using aiyabot as a code base for my customised stable diffusion Discord bot.
+https://github.com/killfrenzy96/aiyabot
 
 # Shanghai - AI Powered Art in a Discord Bot!
 
